@@ -1,0 +1,65 @@
+{
+  "collections": {
+    "users": {
+      "schema": {
+        "id": "string",
+        "username": "string",
+        "name": "string",
+        "role": "string",
+        "status": "string",
+        "email": "string",
+        "allowedCovenants": "array",
+        "allowedBanks": "array"
+      }
+    },
+    "covenants": {
+      "schema": {
+        "id": "string",
+        "name": "string",
+        "category": "string",
+        "state": "string",
+        "city": "string",
+        "organ": "string",
+        "manager": "string",
+        "observations": "string",
+        "status": "string"
+      }
+    },
+    "systems": {
+      "schema": {
+        "id": "string",
+        "covenantId": "string",
+        "name": "string",
+        "description": "string",
+        "url": "string",
+        "icon": "string",
+        "observations": "string",
+        "status": "string"
+      }
+    },
+    "logins": {
+      "schema": {
+        "id": "string",
+        "covenantId": "string",
+        "systemId": "string",
+        "bank": "string",
+        "shop": "string",
+        "username": "string",
+        "password": "string",
+        "cpf": "string",
+        "pin": "string",
+        "token": "string",
+        "email": "string",
+        "phone": "string",
+        "responsible": "string",
+        "observations": "string",
+        "creationDate": "string",
+        "lastAlteration": "string",
+        "expirationDate": "string",
+        "status": "string",
+        "reservedBy": "string?",
+        "reservedAt": "string?"
+      }
+    }
+  }
+}

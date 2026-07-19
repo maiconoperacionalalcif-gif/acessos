@@ -326,11 +326,16 @@ async function startServer() {
       try {
         console.log(`Routing ${action} to Google Sheets Apps Script...`);
         const result = await callAppsScript(scriptUrl, action, appsScriptPayload);
-        // Sync local DB cache if return format contains database
-        if (result && result.success && result.database) {
-          dataBase = { ...dataBase, ...result.database };
+        if (result && result.success) {
+          // Sync local DB cache if return format contains database
+          if (result.database) {
+            dataBase = { ...dataBase, ...result.database };
+          }
+          return result;
+        } else {
+          console.warn(`Apps Script returned success=false or invalid response for ${action}. Falling back to local database.`, result);
+          return localFallback();
         }
-        return result;
       } catch (err: any) {
         console.error("Failed to call Apps Script, falling back to local database:", err.message);
         // If external call fails, we execute local fallback
