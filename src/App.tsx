@@ -28,6 +28,35 @@ import Reports from './components/Reports';
 import Import from './components/Import';
 import Settings from './components/Settings';
 
+const MOCK_DATABASE: FullDatabase = {
+  config: {
+    companyName: 'Access Manager (Segurança)',
+    logoUrl: '',
+    primaryColor: '#2563eb',
+    sessionTimeoutMinutes: 30,
+    rowsPerPage: 10,
+    googleAppsScriptUrl: ''
+  },
+  users: [
+    {
+      id: 'usr-fallback',
+      username: 'admin',
+      name: 'Maicon Operacional (Modo de Segurança)',
+      password: 'admin',
+      role: 'Administrador',
+      status: 'Ativo',
+      allowedCovenants: [],
+      allowedBanks: []
+    }
+  ],
+  covenants: [],
+  systems: [],
+  logins: [],
+  favorites: [],
+  reservationLogs: [],
+  historyLogs: []
+};
+
 export default function App() {
   const [db, setDb] = useState<FullDatabase | null>(null);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -35,6 +64,7 @@ export default function App() {
   const [searchFilter, setSearchFilter] = useState<any>(null); // For navigation drilldowns
   const [darkMode, setDarkMode] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
+  const [dbError, setDbError] = useState<string | null>(null);
 
   // Login form state
   const [usernameInput, setUsernameInput] = useState('');
@@ -45,10 +75,12 @@ export default function App() {
   const fetchDatabase = useCallback(async () => {
     try {
       setLoading(true);
+      setDbError(null);
       const data = await api.getDatabase();
       setDb(data);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Erro ao carregar banco de dados:", err);
+      setDbError(err.message || "Falha ao carregar banco de dados.");
     } finally {
       setLoading(false);
     }
@@ -103,7 +135,20 @@ export default function App() {
   // Execute authentication
   const handleLoginSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!db) return;
+    
+    if (!db) {
+      // Emergency Login Fallback
+      if (usernameInput.toLowerCase().trim() === 'admin' && passwordInput === 'admin') {
+        setDb(MOCK_DATABASE);
+        setCurrentUser(MOCK_DATABASE.users[0]);
+        setLoginError('');
+        setUsernameInput('');
+        setPasswordInput('');
+      } else {
+        setLoginError('O banco de dados não pôde ser carregado. Você pode entrar temporariamente com usuário "admin" e senha "admin" (Modo de Segurança) para resolver o problema nas Configurações.');
+      }
+      return;
+    }
 
     const matchedUser = db.users.find(
       u => u.username.toLowerCase() === usernameInput.toLowerCase().trim() && 
@@ -126,7 +171,16 @@ export default function App() {
 
   // Demo user login shortcut helper (pure master stroke for instant UI testing)
   const handleQuickLogin = (role: 'Administrador' | 'Supervisor' | 'Operador') => {
-    if (!db) return;
+    if (!db) {
+      if (role === 'Administrador') {
+        setDb(MOCK_DATABASE);
+        setCurrentUser(MOCK_DATABASE.users[0]);
+        setLoginError('');
+      } else {
+        setLoginError('Modo de segurança ativo. Utilize o login de Administrador para acessar.');
+      }
+      return;
+    }
     const user = db.users.find(u => u.role === role);
     if (user) {
       setCurrentUser(user);
@@ -338,6 +392,34 @@ export default function App() {
             </h1>
             <p className="text-xs text-slate-400 dark:text-slate-500 font-medium">Controle de acessos, senhas e auditagem de correspondentes.</p>
           </div>
+
+          {dbError && (
+            <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 text-xs space-y-2">
+              <p className="font-bold flex items-center gap-1.5">
+                <span>⚠️ Conexão com o Banco de Dados</span>
+              </p>
+              <p className="text-[11px] leading-relaxed">Não foi possível carregar as informações do servidor. Isso geralmente acontece se a URL do Google Sheets estiver incorreta ou inacessível no momento.</p>
+              <div className="flex gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={fetchDatabase}
+                  className="px-2.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-bold text-[10px] uppercase tracking-wider transition-colors cursor-pointer"
+                >
+                  Tentar Novamente
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDb(MOCK_DATABASE);
+                    setLoginError('Modo de Segurança ativado. Faça login com usuário "admin" e senha "admin" para ajustar as configurações.');
+                  }}
+                  className="px-2.5 py-1.5 bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 rounded-lg font-bold text-[10px] uppercase tracking-wider hover:bg-slate-300 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+                >
+                  Usar Banco Local
+                </button>
+              </div>
+            </div>
+          )}
 
           {loginError && (
             <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-500 text-xs font-semibold leading-tight">
