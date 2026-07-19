@@ -411,7 +411,8 @@ export default function App() {
                   type="button"
                   onClick={() => {
                     setDb(MOCK_DATABASE);
-                    setLoginError('Modo de Segurança ativado. Faça login com usuário "admin" e senha "admin" para ajustar as configurações.');
+                    setDbError(null);
+                    setLoginError('Modo de Segurança ativado. Faça login com usuário "admin" e senha "admin" para acessar.');
                   }}
                   className="px-2.5 py-1.5 bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 rounded-lg font-bold text-[10px] uppercase tracking-wider hover:bg-slate-300 dark:hover:bg-slate-700 transition-colors cursor-pointer"
                 >

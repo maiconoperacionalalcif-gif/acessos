@@ -1,6 +1,7 @@
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
+import fs from "fs";
 
 // In-Memory Spreadsheet Simulation (Database)
 let dataBase = {
@@ -503,8 +504,9 @@ async function startServer() {
     res.json(result);
   });
 
-  // Vite middleware for development
-  if (process.env.NODE_ENV !== "production") {
+  // Vite middleware for development (with fallback to production if dist directory exists)
+  const hasDist = fs.existsSync(path.join(process.cwd(), "dist"));
+  if (process.env.NODE_ENV !== "production" && !hasDist) {
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
