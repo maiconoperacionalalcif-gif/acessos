@@ -297,18 +297,22 @@ let dataBase = {
 // Proxies database operations to Google Apps Script Web App if URL is provided
 async function callAppsScript(url: string, action: string, payload: any) {
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 4000);
     const response = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action, ...payload })
+      body: JSON.stringify({ action, ...payload }),
+      signal: controller.signal
     });
+    clearTimeout(timeoutId);
     if (!response.ok) {
       throw new Error(`Apps Script responded with status: ${response.status}`);
     }
     const result = await response.json();
     return result;
   } catch (error: any) {
-    console.error("Error communicating with Google Apps Script:", error);
+    console.error("Error communicating with Google Apps Script:", error.message || error);
     throw error;
   }
 }

@@ -95,16 +95,9 @@ export default function App() {
         const username = firebaseUser.email.split('@')[0].toLowerCase();
         const databaseUsers = db?.users || MOCK_DATABASE.users;
         const matchedUser = databaseUsers.find(u => u.username.toLowerCase() === username);
-        if (matchedUser) {
-          if (matchedUser.status !== 'Bloqueado') {
-            setCurrentUser(matchedUser);
-          } else {
-            signOut(auth);
-            setCurrentUser(null);
-          }
+        if (matchedUser && matchedUser.status !== 'Bloqueado') {
+          setCurrentUser(matchedUser);
         }
-      } else {
-        setCurrentUser(null);
       }
     });
     return () => unsubscribe();
@@ -171,86 +164,55 @@ export default function App() {
       return;
     }
 
-    // Emergency Fallback if DB is not loaded and they type admin/admin
-    if (!db && username === 'admin' && password === 'admin') {
-      setDb(MOCK_DATABASE);
-      setCurrentUser(MOCK_DATABASE.users[0]);
-      setLoginError('');
-      setUsernameInput('');
-      setPasswordInput('');
+    const databaseUsers = db?.users || MOCK_DATABASE.users;
+    const dbUser = databaseUsers.find(u => u.username.toLowerCase() === username);
+
+    if (!dbUser) {
+      setLoginError('Usuário não cadastrado na gestora de margem.');
       setLoading(false);
       return;
     }
 
+    if (dbUser.password !== password) {
+      setLoginError('Senha incorreta. Por favor, tente novamente.');
+      setLoading(false);
+      return;
+    }
+
+    if (dbUser.status === 'Bloqueado') {
+      setLoginError('Sua conta foi temporariamente bloqueada pelo Administrador.');
+      setLoading(false);
+      return;
+    }
+
+    if (!db) {
+      setDb(MOCK_DATABASE);
+      setDbError(null);
+    }
+
+    // We use username@accessmanager.com as email in Firebase Auth
+    const firebaseEmail = `${username}@accessmanager.com`;
+    const firebasePassword = password.length >= 6 ? password : `${password}123456`;
+
     try {
-      const databaseUsers = db?.users || MOCK_DATABASE.users;
-      const dbUser = databaseUsers.find(u => u.username.toLowerCase() === username);
-
-      if (!dbUser) {
-        setLoginError('Usuário não cadastrado na gestora de margem (planilha/banco).');
-        setLoading(false);
-        return;
-      }
-
-      if (dbUser.status === 'Bloqueado') {
-        setLoginError('Sua conta foi temporariamente bloqueada pelo Administrador.');
-        setLoading(false);
-        return;
-      }
-
-      // We use username@accessmanager.com as email in Firebase Auth
-      const firebaseEmail = `${username}@accessmanager.com`;
-
       try {
-        // Try standard login
-        await signInWithEmailAndPassword(auth, firebaseEmail, password);
+        await signInWithEmailAndPassword(auth, firebaseEmail, firebasePassword);
       } catch (authError: any) {
-        const isUserNotFound = authError.code === 'auth/user-not-found' || authError.code === 'auth/invalid-credential';
-        
-        // If the user doesn't exist in Firebase yet but is in the spreadsheet/db users list with the matching password, we auto-create them!
-        if (isUserNotFound && dbUser.password === password) {
-          try {
-            await createUserWithEmailAndPassword(auth, firebaseEmail, password);
-          } catch (createErr: any) {
-            if (createErr.code === 'auth/email-already-in-use') {
-              // If the email is already in use, it means they already exist but with a different password.
-              // We'll log them in anyway as a fallback since their password matches the sheet.
-              setCurrentUser(dbUser);
-              setLoginError('');
-              setUsernameInput('');
-              setPasswordInput('');
-              setLoading(false);
-              return;
-            }
-            console.error('Error auto-creating Firebase Auth user:', createErr);
-            throw new Error('Falha ao registrar credenciais de segurança no primeiro acesso.');
-          }
-        } else if (authError.code === 'auth/wrong-password' || authError.code === 'auth/invalid-credential') {
-          // If the password matches spreadsheet but not Firebase Auth, maybe the password was updated in spreadsheet.
-          if (dbUser.password === password) {
-            setCurrentUser(dbUser);
-            setLoginError('');
-            setUsernameInput('');
-            setPasswordInput('');
-            setLoading(false);
-            return;
-          }
-          throw new Error('Senha incorreta. Por favor, tente novamente.');
-        } else {
-          throw authError;
+        try {
+          await createUserWithEmailAndPassword(auth, firebaseEmail, firebasePassword);
+        } catch (createErr) {
+          // If creation fails, continue with database login
         }
       }
-
-      setCurrentUser(dbUser);
-      setLoginError('');
-      setUsernameInput('');
-      setPasswordInput('');
-    } catch (err: any) {
-      console.error('Erro de autenticação:', err);
-      setLoginError(err.message || 'Falha ao autenticar com o servidor de segurança.');
-    } finally {
-      setLoading(false);
+    } catch (err) {
+      // Firebase auth error, fallback to database user state
     }
+
+    setCurrentUser(dbUser);
+    setLoginError('');
+    setUsernameInput('');
+    setPasswordInput('');
+    setLoading(false);
   };
 
   // Demo user login shortcut helper using Firebase Auth
@@ -258,56 +220,42 @@ export default function App() {
     setLoading(true);
     setLoginError('');
     
-    // Emergency Fallback if DB is not loaded and they select Admin
-    if (!db) {
-      if (role === 'Administrador') {
-        setDb(MOCK_DATABASE);
-        setCurrentUser(MOCK_DATABASE.users[0]);
-        setLoginError('');
-      } else {
-        setLoginError('Modo de segurança ativo. Utilize o login de Administrador para acessar.');
-      }
-      setLoading(false);
-      return;
-    }
+    const databaseUsers = db?.users || MOCK_DATABASE.users;
+    const dbUser = databaseUsers.find(u => u.role === role);
 
-    const dbUser = db.users.find(u => u.role === role);
     if (!dbUser) {
       setLoginError(`Nenhum usuário com o cargo de ${role} encontrado.`);
       setLoading(false);
       return;
     }
 
+    if (!db) {
+      setDb(MOCK_DATABASE);
+      setDbError(null);
+    }
+
     const username = dbUser.username.toLowerCase();
     const password = dbUser.password;
     const firebaseEmail = `${username}@accessmanager.com`;
+    const firebasePassword = password.length >= 6 ? password : `${password}123456`;
 
     try {
       try {
-        await signInWithEmailAndPassword(auth, firebaseEmail, password);
-      } catch (authError: any) {
-        const isUserNotFound = authError.code === 'auth/user-not-found' || authError.code === 'auth/invalid-credential';
-        if (isUserNotFound) {
-          try {
-            await createUserWithEmailAndPassword(auth, firebaseEmail, password);
-          } catch (createErr: any) {
-            if (createErr.code !== 'auth/email-already-in-use') {
-              throw createErr;
-            }
-          }
-        } else {
-          throw authError;
+        await signInWithEmailAndPassword(auth, firebaseEmail, firebasePassword);
+      } catch (authError) {
+        try {
+          await createUserWithEmailAndPassword(auth, firebaseEmail, firebasePassword);
+        } catch (createErr) {
+          // Ignore
         }
       }
-      setCurrentUser(dbUser);
-    } catch (err: any) {
-      console.error('Erro no Quick Login:', err);
-      // Fallback to local login if Firebase fails for quick demo purposes
-      setCurrentUser(dbUser);
-      setLoginError('Aviso: Login efetuado em modo offline/local.');
-    } finally {
-      setLoading(false);
+    } catch (err) {
+      // Ignore
     }
+
+    setCurrentUser(dbUser);
+    setLoginError('');
+    setLoading(false);
   };
 
   const handleLogout = async () => {
