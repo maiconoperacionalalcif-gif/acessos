@@ -28,10 +28,11 @@ import Logins from './components/Logins';
 import Users from './components/Users';
 import History from './components/History';
 import Settings from './components/Settings';
+import ErrorBoundary from './components/ErrorBoundary';
 
 const MOCK_DATABASE: FullDatabase = {
   config: {
-    companyName: 'Access Manager (Segurança)',
+    companyName: 'Access Manager',
     logoUrl: '',
     primaryColor: '#2563eb',
     sessionTimeoutMinutes: 30,
@@ -40,22 +41,194 @@ const MOCK_DATABASE: FullDatabase = {
   },
   users: [
     {
-      id: 'usr-fallback',
+      id: 'usr-1',
       username: 'admin',
-      name: 'Maicon Operacional (Modo de Segurança)',
+      name: 'Maicon Operacional (Admin)',
       password: 'admin',
       role: 'Administrador',
       status: 'Ativo',
       allowedCovenants: [],
       allowedBanks: []
+    },
+    {
+      id: 'usr-2',
+      username: 'supervisor',
+      name: 'Amanda Lima (Supervisor)',
+      password: 'supervisor',
+      role: 'Supervisor',
+      status: 'Ativo',
+      allowedCovenants: ['cov-1', 'cov-2'],
+      allowedBanks: ['Banco do Brasil', 'Itaú']
+    },
+    {
+      id: 'usr-3',
+      username: 'operador',
+      name: 'Bruno Silva (Operador)',
+      password: 'operador',
+      role: 'Operador',
+      status: 'Ativo',
+      allowedCovenants: ['cov-1'],
+      allowedBanks: ['Banco do Brasil']
     }
   ],
-  covenants: [],
-  systems: [],
-  logins: [],
-  favorites: [],
+  covenants: [
+    {
+      id: "cov-1",
+      name: "SIAPE / SouGov",
+      category: "Federal",
+      state: "DF",
+      city: "Brasília",
+      organ: "Ministério da Economia",
+      manager: "Governo Federal",
+      observations: "Acesso unificado via SouGov. Gov.br bronze/prata/ouro.",
+      status: "Ativo"
+    },
+    {
+      id: "cov-2",
+      name: "INSS - Dataprev",
+      category: "INSS",
+      state: "Nacional",
+      city: "Rio de Janeiro",
+      organ: "INSS",
+      manager: "Dataprev",
+      observations: "Consultas de extrato de empréstimo e margem.",
+      status: "Ativo"
+    },
+    {
+      id: "cov-3",
+      name: "Governo de SP - Portal do Estado",
+      category: "Estadual",
+      state: "SP",
+      city: "São Paulo",
+      organ: "Secretaria de Gestão Pública",
+      manager: "Prodesp",
+      observations: "Consignado estadual SP - servidores ativos e aposentados.",
+      status: "Ativo"
+    },
+    {
+      id: "cov-4",
+      name: "Prefeitura de SP - Consiglog",
+      category: "Municipal",
+      state: "SP",
+      city: "São Paulo",
+      organ: "Prefeitura de SP",
+      manager: "Consiglog",
+      observations: "Portal de consignação dos servidores municipais de SP.",
+      status: "Ativo"
+    }
+  ],
+  systems: [
+    {
+      id: "sys-1",
+      covenantId: "cov-1",
+      name: "SouGov",
+      description: "Sistema de Gestão de Pessoas do Governo Federal",
+      url: "https://www.gov.br/sougov",
+      icon: "ShieldAlert",
+      observations: "Exige verificação em duas etapas em alguns perfis.",
+      status: "Ativo"
+    },
+    {
+      id: "sys-2",
+      covenantId: "cov-2",
+      name: "Dataprev - Meu INSS",
+      description: "Extrato e consulta de benefícios previdenciários",
+      url: "https://meu.inss.gov.br",
+      icon: "Database",
+      observations: "Integração via certificado digital e login CPF.",
+      status: "Ativo"
+    },
+    {
+      id: "sys-3",
+      covenantId: "cov-3",
+      name: "Portal do Servidor SP",
+      description: "Consulta de holerite e consignações SP",
+      url: "https://www.portaldoservidor.sp.gov.br",
+      icon: "Globe",
+      observations: "Instabilidade frequente no fechamento de folha.",
+      status: "Ativo"
+    },
+    {
+      id: "sys-4",
+      covenantId: "cov-4",
+      name: "Consiglog Prefeitura SP",
+      description: "Gerenciamento de margem consignável da PMSP",
+      url: "https://pmsp.consiglog.com.br",
+      icon: "KeyRound",
+      observations: "Usa captcha na tela de autenticação inicial.",
+      status: "Ativo"
+    },
+    {
+      id: "sys-5",
+      covenantId: "",
+      name: "ConsigX",
+      description: "Gestora de Margem Consignável ConsigX",
+      url: "https://saec.consigx.com.br",
+      icon: "Monitor",
+      observations: "Gestora utilizada em diversos convênios estaduais e municipais.",
+      status: "Ativo"
+    }
+  ],
+  logins: [
+    {
+      id: "log-1",
+      covenantId: "cov-1",
+      systemId: "sys-1",
+      bank: "Banco do Brasil",
+      shop: "Filial SP Centro",
+      username: "bb.consignado01",
+      password: "BB@Consig#2026",
+      cpf: "123.456.789-00",
+      pin: "4321",
+      token: "BB-9876",
+      email: "consignado01@bbfinanceiro.com.br",
+      phone: "(11) 98765-4321",
+      responsible: "Carlos Alberto",
+      observations: "Utilizar apenas para propostas acima de R$ 50k.",
+      creationDate: "2026-01-10T10:00:00.000Z",
+      lastAlteration: "2026-07-15T14:30:00.000Z",
+      expirationDate: "2026-12-31T23:59:59.000Z",
+      status: "Ativo"
+    },
+    {
+      id: "log-2",
+      covenantId: "cov-2",
+      systemId: "sys-2",
+      bank: "Itaú Consignado",
+      shop: "Matriz Campinas",
+      username: "itau.prev02",
+      password: "ItauPass#8822",
+      cpf: "987.654.321-11",
+      pin: "1234",
+      token: "IT-5544",
+      email: "operacao.campinas@itauconsignado.com.br",
+      phone: "(19) 97123-8899",
+      responsible: "Mariana Souza",
+      observations: "Acesso direto Dataprev. Troca de senha a cada 60 dias.",
+      creationDate: "2026-02-01T11:20:00.000Z",
+      lastAlteration: "2026-06-20T09:15:00.000Z",
+      expirationDate: "2026-11-30T23:59:59.000Z",
+      status: "Ativo"
+    }
+  ],
+  favorites: [
+    { systemId: "sys-1", userId: "usr-1" },
+    { systemId: "sys-2", userId: "usr-1" }
+  ],
   reservationLogs: [],
-  historyLogs: []
+  historyLogs: [
+    {
+      id: "hist-1",
+      userId: "usr-1",
+      userName: "Maicon Operacional (Admin)",
+      actionType: "Criar",
+      targetType: "Login",
+      targetId: "log-1",
+      targetName: "bb.consignado01",
+      timestamp: "2026-07-15T14:30:00.000Z",
+      ip: "192.168.1.50"
+    }
+  ]
 };
 
 export default function App() {
@@ -86,10 +259,21 @@ export default function App() {
       setLoading(true);
       setDbError(null);
       const data = await api.getDatabase();
-      setDb(data);
+      const sanitizedData: FullDatabase = {
+        config: data?.config || MOCK_DATABASE.config,
+        users: Array.isArray(data?.users) && data.users.length > 0 ? data.users : MOCK_DATABASE.users,
+        covenants: Array.isArray(data?.covenants) ? data.covenants : MOCK_DATABASE.covenants,
+        systems: Array.isArray(data?.systems) ? data.systems : MOCK_DATABASE.systems,
+        logins: Array.isArray(data?.logins) ? data.logins : MOCK_DATABASE.logins,
+        favorites: Array.isArray(data?.favorites) ? data.favorites : [],
+        reservationLogs: Array.isArray(data?.reservationLogs) ? data.reservationLogs : [],
+        historyLogs: Array.isArray(data?.historyLogs) ? data.historyLogs : []
+      };
+      setDb(sanitizedData);
     } catch (err: any) {
       console.error("Erro ao carregar banco de dados:", err);
       setDbError(err.message || "Falha ao carregar banco de dados.");
+      setDb(prev => prev || MOCK_DATABASE);
     } finally {
       setLoading(false);
     }
@@ -278,7 +462,11 @@ export default function App() {
   // Tab navigation & filtered drilldown routing
   const handleNavigateToTab = (tabName: string, filter?: any) => {
     setSearchFilter(filter || null);
-    setCurrentTab(tabName);
+    if (tabName === 'systems') {
+      setCurrentTab('logins');
+    } else {
+      setCurrentTab(tabName);
+    }
   };
 
   // CRUD Save helper across modules
@@ -295,7 +483,7 @@ export default function App() {
 
       // Create history log entry
       if (currentUser) {
-        const targetName = item.name || item.username || item.id;
+        const targetName = (item as any).name || (item as any).username || item.id;
         const log: HistoryLog = {
           id: `hist-${Date.now()}`,
           userId: currentUser.id,
@@ -319,7 +507,7 @@ export default function App() {
   const handleDeleteItem = async (table: 'covenants' | 'systems' | 'logins' | 'users', id: string) => {
     try {
       const currentItem = db?.[table]?.find((x: any) => x.id === id);
-      const targetName = currentItem ? (currentItem.name || currentItem.username) : id;
+      const targetName = currentItem ? ((currentItem as any).name || (currentItem as any).username) : id;
       const targetType = table === 'covenants' ? 'Covenant' : 
                          table === 'systems' ? 'System' : 
                          table === 'logins' ? 'Login' : 'User';
@@ -655,77 +843,109 @@ export default function App() {
         <main className="flex-1 overflow-y-auto p-4 md:p-8">
           <div className="max-w-7xl mx-auto space-y-6">
             
-            {/* Tabs routing matrix */}
-            {currentTab === 'dashboard' && db && (
-              <Dashboard
-                db={db}
-                currentUser={currentUser}
-                darkMode={darkMode}
-                onToggleFavorite={handleToggleFavorite}
-                onNavigateToTab={handleNavigateToTab}
-                onReserve={handleReserveLogin}
-                onRelease={handleReleaseLogin}
-              />
-            )}
+            <ErrorBoundary key={currentTab}>
+              {!db ? (
+                <div className="p-8 text-center bg-white dark:bg-slate-900 rounded-2xl border border-amber-200 dark:border-amber-900/50 shadow-lg my-6">
+                  <p className="font-bold text-amber-600 dark:text-amber-400 text-base mb-1">⚠️ Conectando ao Banco de Dados...</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">Aguardando resposta do servidor ou sincronização com a planilha.</p>
+                  <button
+                    onClick={() => {
+                      setDb(MOCK_DATABASE);
+                      setDbError(null);
+                    }}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md cursor-pointer transition-all"
+                  >
+                    Carregar Banco Local
+                  </button>
+                </div>
+              ) : (
+                <>
+                  {currentTab === 'dashboard' && (
+                    <Dashboard
+                      db={db}
+                      currentUser={currentUser}
+                      darkMode={darkMode}
+                      onToggleFavorite={handleToggleFavorite}
+                      onNavigateToTab={handleNavigateToTab}
+                      onReserve={handleReserveLogin}
+                      onRelease={handleReleaseLogin}
+                    />
+                  )}
 
-            {currentTab === 'covenants' && db && (
-              <Covenants
-                covenants={db.covenants}
-                currentUser={currentUser}
-                darkMode={darkMode}
-                onSave={(item) => handleSaveItem('covenants', item)}
-                onDelete={(id) => handleDeleteItem('covenants', id)}
-              />
-            )}
+                  {currentTab === 'covenants' && (
+                    <Covenants
+                      covenants={db.covenants || []}
+                      currentUser={currentUser}
+                      darkMode={darkMode}
+                      onSave={(item) => handleSaveItem('covenants', item)}
+                      onDelete={(id) => handleDeleteItem('covenants', id)}
+                    />
+                  )}
 
-            {currentTab === 'logins' && db && (
-              <Logins
-                logins={db.logins}
-                systems={db.systems}
-                covenants={db.covenants}
-                currentUser={currentUser}
-                darkMode={darkMode}
-                initialSystemFilterId={searchFilter?.systemId || ''}
-                onSave={(item) => handleSaveItem('logins', item)}
-                onDelete={(id) => handleDeleteItem('logins', id)}
-                onReserve={handleReserveLogin}
-                onRelease={handleReleaseLogin}
-                onLogAction={(actionType, targetId, targetName) => handleLogAction(actionType, 'Login', targetId, targetName)}
-                onSyncGoogleSheets={() => handleSyncGoogleSheets()}
-                isSyncingSheets={isSyncingSheets}
-              />
-            )}
+                  {(currentTab === 'logins' || currentTab === 'systems') && (
+                    <Logins
+                      logins={db.logins || []}
+                      systems={db.systems || []}
+                      covenants={db.covenants || []}
+                      currentUser={currentUser}
+                      darkMode={darkMode}
+                      initialSystemFilterId={searchFilter?.systemId || ''}
+                      onSave={(item) => handleSaveItem('logins', item)}
+                      onDelete={(id) => handleDeleteItem('logins', id)}
+                      onReserve={handleReserveLogin}
+                      onRelease={handleReleaseLogin}
+                      onLogAction={(actionType, targetId, targetName) => handleLogAction(actionType, 'Login', targetId, targetName)}
+                      onSyncGoogleSheets={() => handleSyncGoogleSheets()}
+                      isSyncingSheets={isSyncingSheets}
+                    />
+                  )}
 
-            {currentTab === 'users' && db && (
-              <Users
-                users={db.users}
-                covenants={db.covenants}
-                currentUser={currentUser}
-                darkMode={darkMode}
-                onSave={(item) => handleSaveItem('users', item)}
-                onDelete={(id) => handleDeleteItem('users', id)}
-              />
-            )}
+                  {currentTab === 'users' && (
+                    <Users
+                      users={db.users || []}
+                      covenants={db.covenants || []}
+                      currentUser={currentUser}
+                      darkMode={darkMode}
+                      onSave={(item) => handleSaveItem('users', item)}
+                      onDelete={(id) => handleDeleteItem('users', id)}
+                    />
+                  )}
 
-            {currentTab === 'history' && db && (
-              <History
-                logs={db.historyLogs}
-                currentUser={currentUser}
-                darkMode={darkMode}
-              />
-            )}
+                  {currentTab === 'history' && (
+                    <History
+                      logs={db.historyLogs || []}
+                      currentUser={currentUser}
+                      darkMode={darkMode}
+                    />
+                  )}
 
-            {currentTab === 'settings' && db && (
-              <Settings
-                config={db.config}
-                darkMode={darkMode}
-                onSaveConfig={handleSaveConfig}
-                onRestoreBackup={handleRestoreBackup}
-                fullState={db}
-                onSyncSheets={(url) => handleSyncGoogleSheets(url)}
-                isSyncingSheets={isSyncingSheets}
-              />
-            )}
+                  {currentTab === 'settings' && (
+                    <Settings
+                      config={db.config}
+                      darkMode={darkMode}
+                      onSaveConfig={handleSaveConfig}
+                      onRestoreBackup={handleRestoreBackup}
+                      fullState={db}
+                      onSyncSheets={(url) => handleSyncGoogleSheets(url)}
+                      isSyncingSheets={isSyncingSheets}
+                    />
+                  )}
+
+                  {/* Fallback if currentTab is unmatched */}
+                  {!['dashboard', 'covenants', 'logins', 'systems', 'users', 'history', 'settings'].includes(currentTab) && (
+                    <Dashboard
+                      db={db}
+                      currentUser={currentUser}
+                      darkMode={darkMode}
+                      onToggleFavorite={handleToggleFavorite}
+                      onNavigateToTab={handleNavigateToTab}
+                      onReserve={handleReserveLogin}
+                      onRelease={handleReleaseLogin}
+                    />
+                  )}
+                </>
+              )}
+            </ErrorBoundary>
 
           </div>
         </main>
