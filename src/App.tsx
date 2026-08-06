@@ -634,7 +634,7 @@ export default function App() {
     setIsSyncingSheets(true);
     setSyncResult(null);
     try {
-      const res = await api.syncGoogleSheets(customUrl);
+      const res = await api.syncGoogleSheets(customUrl, db || undefined);
       if (res.success && res.database) {
         setDb(res.database);
         setSyncResult({

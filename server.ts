@@ -3,6 +3,7 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import fs from "fs";
 import { FullDatabase } from "./src/lib/api";
+import { transformGoogleSheetsUrl, parseCSV, syncCsvRowsToDatabase } from "./src/lib/sheetsSync";
 
 // In-Memory Spreadsheet Simulation (Database)
 let dataBase: FullDatabase = {
@@ -560,216 +561,35 @@ async function startServer() {
         url = dataBase.config.googleSheetsSyncUrl || "https://docs.google.com/spreadsheets/d/e/2PACX-1vQcMpLh93RfKdkQ6mGju40CgMTaz7RhBP7S_5LiNWF1BY0ZigqO8dpZpSh1gtx_oAiDtIyXX8Jc-gbC/pubhtml";
       }
 
-      // Save URL to config
       dataBase.config.googleSheetsSyncUrl = url;
 
-      // Transform URL to CSV export format
-      let csvUrl = url.trim();
-      if (csvUrl.includes('/pubhtml')) {
-        csvUrl = csvUrl.replace('/pubhtml', '/pub?output=csv');
-      } else if (csvUrl.includes('/edit')) {
-        csvUrl = csvUrl.replace(/\/edit.*$/, '/export?format=csv');
-      } else if (!csvUrl.includes('output=csv') && !csvUrl.includes('format=csv')) {
-        if (csvUrl.includes('?')) {
-          csvUrl += '&output=csv';
-        } else {
-          csvUrl += '/pub?output=csv';
-        }
-      }
-
+      const csvUrl = transformGoogleSheetsUrl(url);
       console.log(`Fetching Google Sheets CSV from: ${csvUrl}`);
+      
       const response = await fetch(csvUrl);
       if (!response.ok) {
-        throw new Error(`Não foi possível acessar a planilha. Status: ${response.status}`);
+        throw new Error(`Não foi possível acessar a planilha do Google. Status HTTP: ${response.status}`);
       }
 
       const csvText = await response.text();
+      const lowerText = csvText.trim().toLowerCase();
 
-      // Helper CSV Parser
-      function parseCSV(text: string): string[][] {
-        const lines: string[][] = [];
-        let cur: string[] = [];
-        let cell = "";
-        let inQuotes = false;
-        for (let i = 0; i < text.length; i++) {
-          const c = text[i];
-          if (c === '"') {
-            if (inQuotes && text[i + 1] === '"') {
-              cell += '"';
-              i++;
-            } else {
-              inQuotes = !inQuotes;
-            }
-          } else if (c === ',' && !inQuotes) {
-            cur.push(cell.trim());
-            cell = "";
-          } else if ((c === '\r' || c === '\n') && !inQuotes) {
-            if (c === '\r' && text[i + 1] === '\n') i++;
-            cur.push(cell.trim());
-            lines.push(cur);
-            cur = [];
-            cell = "";
-          } else {
-            cell += c;
-          }
-        }
-        if (cell || cur.length) {
-          cur.push(cell.trim());
-          lines.push(cur);
-        }
-        return lines;
+      if (lowerText.startsWith('<!doctype') || lowerText.startsWith('<html') || csvText.includes('The page created')) {
+        throw new Error('A planilha do Google Sheets não está publicada como CSV pública. No Google Sheets acesse: Arquivo > Compartilhar > Publicar na Web > Escolha "Valores separados por vírgula (.csv)" e clique em Publicar.');
       }
 
       const rows = parseCSV(csvText);
-
-      let currentConvenio = "Geral";
-      let covenantsCreated = 0;
-      let loginsCreated = 0;
-      let loginsUpdated = 0;
-      let totalProcessed = 0;
-
-      for (let idx = 0; idx < rows.length; idx++) {
-        const row = rows[idx];
-        const colA = row[0] || "";
-        const colB = row[1] || "";
-        const colC = row[2] || "";
-        const colD = row[3] || "";
-        const colE = row[4] || "";
-
-        const upperA = colA.toUpperCase();
-        const upperB = colB.toUpperCase();
-
-        // Skip header lines
-        if (upperA.includes("CONVÊNIO") || upperB.includes("USUARIO") || upperB.includes("LOGIN")) continue;
-
-        if (colA && colA.trim().length > 0) {
-          currentConvenio = colA.trim();
-        }
-
-        const username = colB.trim();
-        const password = colC.trim();
-        const bank = colD.trim();
-        const managerUrl = colE.trim();
-
-        // Valid row if username or password exists
-        if (username.length > 0 || password.length > 0) {
-          totalProcessed++;
-
-          const convenioName = colA.trim() || currentConvenio || "Geral";
-
-          // Find or create covenant
-          let covenant = dataBase.covenants.find(
-            c => c.name.toLowerCase() === convenioName.toLowerCase()
-          );
-
-          if (!covenant) {
-            // Infer state
-            let inferredState = "Nacional";
-            const stateMatches = convenioName.match(/\b(AC|AL|AP|AM|BA|CE|DF|ES|GO|MA|MT|MS|MG|PA|PB|PR|PE|PI|RJ|RN|RS|RO|RR|SC|SP|SE|TO)\b/i);
-            if (stateMatches) {
-              inferredState = stateMatches[1].toUpperCase();
-            }
-
-            // Infer category
-            let category: any = "Estadual";
-            const upperCov = convenioName.toUpperCase();
-            if (upperCov.includes("INSS") || upperCov.includes("DATAPREV")) category = "INSS";
-            else if (upperCov.includes("SIAPE") || upperCov.includes("SOUGOV") || upperCov.includes("FEDERAL")) category = "Federal";
-            else if (upperCov.includes("PREF") || upperCov.includes("MUNICIPAL")) category = "Municipal";
-            else if (upperCov.includes("MILITAR") || upperCov.includes("POLICIA") || upperCov.includes("PM")) category = "Militar";
-
-            covenant = {
-              id: `cov-gs-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-              name: convenioName,
-              category: category,
-              state: inferredState,
-              managerUrl: managerUrl || undefined,
-              observations: "Sincronizado automaticamente da Planilha Google Sheets",
-              status: "Ativo"
-            };
-            dataBase.covenants.push(covenant);
-            covenantsCreated++;
-          } else if (managerUrl && !covenant.managerUrl) {
-            covenant.managerUrl = managerUrl;
-          }
-
-          // System matching
-          let system = dataBase.systems.find(s => s.covenantId === covenant!.id);
-          if (!system) {
-            system = dataBase.systems[0]; // fallback
-          }
-
-          // Find existing login
-          const existingLoginIndex = dataBase.logins.findIndex(l => 
-            l.covenantId === covenant!.id && 
-            l.username.toLowerCase() === username.toLowerCase()
-          );
-
-          const nowIso = new Date().toISOString();
-
-          if (existingLoginIndex > -1) {
-            const existing = dataBase.logins[existingLoginIndex];
-            dataBase.logins[existingLoginIndex] = {
-              ...existing,
-              password: password || existing.password,
-              bank: bank || existing.bank,
-              url: managerUrl || existing.url,
-              lastAlteration: nowIso,
-              status: "Ativo"
-            };
-            loginsUpdated++;
-          } else {
-            const newLogin = {
-              id: `log-gs-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-              covenantId: covenant.id,
-              systemId: system ? system.id : "sys-1",
-              url: managerUrl || undefined,
-              bank: bank || "Outros",
-              shop: "Planilha Google",
-              username: username,
-              password: password,
-              cpf: "",
-              pin: "",
-              token: "",
-              email: "",
-              phone: "",
-              responsible: "Sincronizado via Google Sheets",
-              observations: "Importado da planilha sincronizada",
-              creationDate: nowIso,
-              lastAlteration: nowIso,
-              expirationDate: "",
-              status: "Ativo" as const,
-              reservedBy: "",
-              reservedAt: ""
-            };
-            dataBase.logins.push(newLogin);
-            loginsCreated++;
-          }
-        }
+      if (!rows || rows.length === 0) {
+        throw new Error('A planilha está vazia ou em formato incompatível.');
       }
 
-      // Add log entry
-      dataBase.historyLogs.unshift({
-        id: `hist-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-        userId: "usr-1",
-        userName: "Sistema (Google Sheets)",
-        actionType: "Criar",
-        targetType: "Login",
-        targetId: "sync-gs",
-        targetName: `Sincronização: ${loginsCreated} novos, ${loginsUpdated} atualizados`,
-        timestamp: new Date().toISOString(),
-        ip: "127.0.0.1"
-      });
+      const { updatedDb, stats } = syncCsvRowsToDatabase(dataBase, rows);
+      dataBase = updatedDb;
 
       res.json({
         success: true,
         database: dataBase,
-        stats: {
-          covenantsCreated,
-          loginsCreated,
-          loginsUpdated,
-          totalProcessed
-        }
+        stats
       });
     } catch (error: any) {
       console.error("Error syncing Google Sheets:", error);

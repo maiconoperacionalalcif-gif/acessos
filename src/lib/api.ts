@@ -1,4 +1,5 @@
 import { Covenant, System, Login, User, HistoryLog, SystemConfig, LoginReservationLog } from '../types';
+import { transformGoogleSheetsUrl, parseCSV, syncCsvRowsToDatabase } from './sheetsSync';
 
 export interface FullDatabase {
   config: SystemConfig;
@@ -13,15 +14,30 @@ export interface FullDatabase {
 
 // Fetch database
 export async function fetchDatabase(): Promise<FullDatabase> {
-  const response = await fetch('/api/data');
-  if (!response.ok) {
-    throw new Error('Falha ao buscar dados do servidor');
+  try {
+    const response = await fetch('/api/data');
+    const contentType = response.headers.get('content-type') || '';
+    if (response.ok && contentType.includes('application/json')) {
+      const result = await response.json();
+      if (result.success && result.database) {
+        localStorage.setItem('access_manager_db', JSON.stringify(result.database));
+        return result.database;
+      }
+    }
+  } catch (err) {
+    console.warn('API de dados indisponível, buscando do cache local:', err);
   }
-  const result = await response.json();
-  if (result.success && result.database) {
-    return result.database;
+
+  const cached = localStorage.getItem('access_manager_db');
+  if (cached) {
+    try {
+      return JSON.parse(cached);
+    } catch (e) {
+      // ignore
+    }
   }
-  throw new Error(result.error || 'Erro desconhecido');
+
+  throw new Error('Falha ao buscar dados do servidor');
 }
 
 // Save Config
@@ -125,15 +141,78 @@ export async function importLogins(logins: Login[], logs: HistoryLog[]): Promise
 }
 
 // Sync Google Sheets
-export async function syncGoogleSheets(url?: string): Promise<{ success: boolean; database: FullDatabase; stats: { covenantsCreated: number; loginsCreated: number; loginsUpdated: number; totalProcessed: number } }> {
-  const response = await fetch('/api/sync-google-sheets', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ url }),
-  });
-  const result = await response.json();
-  if (result.success && result.database) return result;
-  throw new Error(result.error || 'Erro ao sincronizar planilha do Google Sheets');
+export async function syncGoogleSheets(
+  url?: string,
+  currentDb?: FullDatabase
+): Promise<{ success: boolean; database: FullDatabase; stats: { covenantsCreated: number; loginsCreated: number; loginsUpdated: number; totalProcessed: number } }> {
+  // Try server API first
+  try {
+    const response = await fetch('/api/sync-google-sheets', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }),
+    });
+
+    const contentType = response.headers.get('content-type') || '';
+    if (response.ok && contentType.includes('application/json')) {
+      const result = await response.json();
+      if (result.success && result.database) {
+        localStorage.setItem('access_manager_db', JSON.stringify(result.database));
+        return result;
+      }
+      if (result.error) {
+        throw new Error(result.error);
+      }
+    }
+  } catch (err: any) {
+    if (err.message && !err.message.includes('JSON') && !err.message.includes('fetch') && !err.message.includes('HTML') && !err.message.includes('Unexpected token')) {
+      throw err;
+    }
+    console.warn('API backend indisponível ou retornou HTML, executando sincronização direta pelo cliente:', err);
+  }
+
+  // Client-side Direct Google Sheets Sync
+  const csvUrl = transformGoogleSheetsUrl(url || '');
+  const res = await fetch(csvUrl);
+  if (!res.ok) {
+    throw new Error(`Não foi possível acessar a planilha pública do Google. Código HTTP: ${res.status}`);
+  }
+
+  const csvText = await res.text();
+  const lowerText = csvText.trim().toLowerCase();
+
+  if (lowerText.startsWith('<!doctype') || lowerText.startsWith('<html') || csvText.includes('The page created')) {
+    throw new Error('A planilha do Google Sheets não está publicada como CSV pública. No Google Sheets acesse: Arquivo > Compartilhar > Publicar na Web > Escolha "Valores separados por vírgula (.csv)" e clique em Publicar.');
+  }
+
+  const rows = parseCSV(csvText);
+  if (!rows || rows.length === 0) {
+    throw new Error('A planilha está vazia ou em formato incompatível.');
+  }
+
+  // Base DB fallback
+  let baseDb = currentDb;
+  if (!baseDb) {
+    const cached = localStorage.getItem('access_manager_db');
+    if (cached) {
+      try { baseDb = JSON.parse(cached); } catch (e) {}
+    }
+  }
+
+  if (!baseDb) {
+    throw new Error('Estado do banco de dados indisponível no momento para sincronização.');
+  }
+
+  baseDb.config.googleSheetsSyncUrl = url || baseDb.config.googleSheetsSyncUrl;
+
+  const { updatedDb, stats } = syncCsvRowsToDatabase(baseDb, rows);
+  localStorage.setItem('access_manager_db', JSON.stringify(updatedDb));
+
+  return {
+    success: true,
+    database: updatedDb,
+    stats
+  };
 }
 
 // Unified export for src/App.tsx matching
