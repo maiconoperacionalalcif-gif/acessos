@@ -98,6 +98,7 @@ export interface SystemConfig {
   sessionTimeoutMinutes: number;
   rowsPerPage: number;
   googleAppsScriptUrl: string;
+  googleSheetsSyncUrl?: string;
 }
 
 export interface FavoriteSystem {

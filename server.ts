@@ -2,16 +2,18 @@ import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import fs from "fs";
+import { FullDatabase } from "./src/lib/api";
 
 // In-Memory Spreadsheet Simulation (Database)
-let dataBase = {
+let dataBase: FullDatabase = {
   config: {
     companyName: "Access Manager Ltda",
     logoUrl: "",
     primaryColor: "#2563eb", // Blue-600
     sessionTimeoutMinutes: 30,
     rowsPerPage: 10,
-    googleAppsScriptUrl: ""
+    googleAppsScriptUrl: "",
+    googleSheetsSyncUrl: "https://docs.google.com/spreadsheets/d/e/2PACX-1vQcMpLh93RfKdkQ6mGju40CgMTaz7RhBP7S_5LiNWF1BY0ZigqO8dpZpSh1gtx_oAiDtIyXX8Jc-gbC/pubhtml"
   },
   
   users: [
@@ -548,6 +550,234 @@ async function startServer() {
       return { success: false, error: "Lista de logins inválida" };
     }, { logins: importedLogins, logs: histLogs });
     res.json(result);
+  });
+
+  // Google Sheets Sync Route
+  app.post("/api/sync-google-sheets", async (req, res) => {
+    try {
+      let { url } = req.body;
+      if (!url) {
+        url = dataBase.config.googleSheetsSyncUrl || "https://docs.google.com/spreadsheets/d/e/2PACX-1vQcMpLh93RfKdkQ6mGju40CgMTaz7RhBP7S_5LiNWF1BY0ZigqO8dpZpSh1gtx_oAiDtIyXX8Jc-gbC/pubhtml";
+      }
+
+      // Save URL to config
+      dataBase.config.googleSheetsSyncUrl = url;
+
+      // Transform URL to CSV export format
+      let csvUrl = url.trim();
+      if (csvUrl.includes('/pubhtml')) {
+        csvUrl = csvUrl.replace('/pubhtml', '/pub?output=csv');
+      } else if (csvUrl.includes('/edit')) {
+        csvUrl = csvUrl.replace(/\/edit.*$/, '/export?format=csv');
+      } else if (!csvUrl.includes('output=csv') && !csvUrl.includes('format=csv')) {
+        if (csvUrl.includes('?')) {
+          csvUrl += '&output=csv';
+        } else {
+          csvUrl += '/pub?output=csv';
+        }
+      }
+
+      console.log(`Fetching Google Sheets CSV from: ${csvUrl}`);
+      const response = await fetch(csvUrl);
+      if (!response.ok) {
+        throw new Error(`Não foi possível acessar a planilha. Status: ${response.status}`);
+      }
+
+      const csvText = await response.text();
+
+      // Helper CSV Parser
+      function parseCSV(text: string): string[][] {
+        const lines: string[][] = [];
+        let cur: string[] = [];
+        let cell = "";
+        let inQuotes = false;
+        for (let i = 0; i < text.length; i++) {
+          const c = text[i];
+          if (c === '"') {
+            if (inQuotes && text[i + 1] === '"') {
+              cell += '"';
+              i++;
+            } else {
+              inQuotes = !inQuotes;
+            }
+          } else if (c === ',' && !inQuotes) {
+            cur.push(cell.trim());
+            cell = "";
+          } else if ((c === '\r' || c === '\n') && !inQuotes) {
+            if (c === '\r' && text[i + 1] === '\n') i++;
+            cur.push(cell.trim());
+            lines.push(cur);
+            cur = [];
+            cell = "";
+          } else {
+            cell += c;
+          }
+        }
+        if (cell || cur.length) {
+          cur.push(cell.trim());
+          lines.push(cur);
+        }
+        return lines;
+      }
+
+      const rows = parseCSV(csvText);
+
+      let currentConvenio = "Geral";
+      let covenantsCreated = 0;
+      let loginsCreated = 0;
+      let loginsUpdated = 0;
+      let totalProcessed = 0;
+
+      for (let idx = 0; idx < rows.length; idx++) {
+        const row = rows[idx];
+        const colA = row[0] || "";
+        const colB = row[1] || "";
+        const colC = row[2] || "";
+        const colD = row[3] || "";
+        const colE = row[4] || "";
+
+        const upperA = colA.toUpperCase();
+        const upperB = colB.toUpperCase();
+
+        // Skip header lines
+        if (upperA.includes("CONVÊNIO") || upperB.includes("USUARIO") || upperB.includes("LOGIN")) continue;
+
+        if (colA && colA.trim().length > 0) {
+          currentConvenio = colA.trim();
+        }
+
+        const username = colB.trim();
+        const password = colC.trim();
+        const bank = colD.trim();
+        const managerUrl = colE.trim();
+
+        // Valid row if username or password exists
+        if (username.length > 0 || password.length > 0) {
+          totalProcessed++;
+
+          const convenioName = colA.trim() || currentConvenio || "Geral";
+
+          // Find or create covenant
+          let covenant = dataBase.covenants.find(
+            c => c.name.toLowerCase() === convenioName.toLowerCase()
+          );
+
+          if (!covenant) {
+            // Infer state
+            let inferredState = "Nacional";
+            const stateMatches = convenioName.match(/\b(AC|AL|AP|AM|BA|CE|DF|ES|GO|MA|MT|MS|MG|PA|PB|PR|PE|PI|RJ|RN|RS|RO|RR|SC|SP|SE|TO)\b/i);
+            if (stateMatches) {
+              inferredState = stateMatches[1].toUpperCase();
+            }
+
+            // Infer category
+            let category: any = "Estadual";
+            const upperCov = convenioName.toUpperCase();
+            if (upperCov.includes("INSS") || upperCov.includes("DATAPREV")) category = "INSS";
+            else if (upperCov.includes("SIAPE") || upperCov.includes("SOUGOV") || upperCov.includes("FEDERAL")) category = "Federal";
+            else if (upperCov.includes("PREF") || upperCov.includes("MUNICIPAL")) category = "Municipal";
+            else if (upperCov.includes("MILITAR") || upperCov.includes("POLICIA") || upperCov.includes("PM")) category = "Militar";
+
+            covenant = {
+              id: `cov-gs-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+              name: convenioName,
+              category: category,
+              state: inferredState,
+              managerUrl: managerUrl || undefined,
+              observations: "Sincronizado automaticamente da Planilha Google Sheets",
+              status: "Ativo"
+            };
+            dataBase.covenants.push(covenant);
+            covenantsCreated++;
+          } else if (managerUrl && !covenant.managerUrl) {
+            covenant.managerUrl = managerUrl;
+          }
+
+          // System matching
+          let system = dataBase.systems.find(s => s.covenantId === covenant!.id);
+          if (!system) {
+            system = dataBase.systems[0]; // fallback
+          }
+
+          // Find existing login
+          const existingLoginIndex = dataBase.logins.findIndex(l => 
+            l.covenantId === covenant!.id && 
+            l.username.toLowerCase() === username.toLowerCase()
+          );
+
+          const nowIso = new Date().toISOString();
+
+          if (existingLoginIndex > -1) {
+            const existing = dataBase.logins[existingLoginIndex];
+            dataBase.logins[existingLoginIndex] = {
+              ...existing,
+              password: password || existing.password,
+              bank: bank || existing.bank,
+              url: managerUrl || existing.url,
+              lastAlteration: nowIso,
+              status: "Ativo"
+            };
+            loginsUpdated++;
+          } else {
+            const newLogin = {
+              id: `log-gs-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+              covenantId: covenant.id,
+              systemId: system ? system.id : "sys-1",
+              url: managerUrl || undefined,
+              bank: bank || "Outros",
+              shop: "Planilha Google",
+              username: username,
+              password: password,
+              cpf: "",
+              pin: "",
+              token: "",
+              email: "",
+              phone: "",
+              responsible: "Sincronizado via Google Sheets",
+              observations: "Importado da planilha sincronizada",
+              creationDate: nowIso,
+              lastAlteration: nowIso,
+              expirationDate: "",
+              status: "Ativo" as const,
+              reservedBy: "",
+              reservedAt: ""
+            };
+            dataBase.logins.push(newLogin);
+            loginsCreated++;
+          }
+        }
+      }
+
+      // Add log entry
+      dataBase.historyLogs.unshift({
+        id: `hist-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+        userId: "usr-1",
+        userName: "Sistema (Google Sheets)",
+        actionType: "Criar",
+        targetType: "Login",
+        targetId: "sync-gs",
+        targetName: `Sincronização: ${loginsCreated} novos, ${loginsUpdated} atualizados`,
+        timestamp: new Date().toISOString(),
+        ip: "127.0.0.1"
+      });
+
+      res.json({
+        success: true,
+        database: dataBase,
+        stats: {
+          covenantsCreated,
+          loginsCreated,
+          loginsUpdated,
+          totalProcessed
+        }
+      });
+    } catch (error: any) {
+      console.error("Error syncing Google Sheets:", error);
+      res.status(500).json({
+        success: false,
+        error: error.message || "Erro ao processar e sincronizar planilha do Google Sheets"
+      });
+    }
   });
 
   // Vite middleware for development (with fallback to production if dist directory exists)

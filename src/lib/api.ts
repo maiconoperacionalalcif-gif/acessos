@@ -124,6 +124,18 @@ export async function importLogins(logins: Login[], logs: HistoryLog[]): Promise
   throw new Error(result.error || 'Erro ao importar logins');
 }
 
+// Sync Google Sheets
+export async function syncGoogleSheets(url?: string): Promise<{ success: boolean; database: FullDatabase; stats: { covenantsCreated: number; loginsCreated: number; loginsUpdated: number; totalProcessed: number } }> {
+  const response = await fetch('/api/sync-google-sheets', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url }),
+  });
+  const result = await response.json();
+  if (result.success && result.database) return result;
+  throw new Error(result.error || 'Erro ao sincronizar planilha do Google Sheets');
+}
+
 // Unified export for src/App.tsx matching
 export const api = {
   getDatabase: fetchDatabase,
@@ -134,6 +146,7 @@ export const api = {
   addLog: addHistoryLog,
   reserveLogin,
   releaseLogin,
-  importLogins
+  importLogins,
+  syncGoogleSheets
 };
 

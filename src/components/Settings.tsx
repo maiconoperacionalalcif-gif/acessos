@@ -24,6 +24,8 @@ interface SettingsProps {
   onSaveConfig: (config: Partial<SystemConfig>) => void;
   onRestoreBackup: (dbState: any) => void;
   fullState: any; // Entire database for backing up
+  onSyncSheets?: (url?: string) => void;
+  isSyncingSheets?: boolean;
 }
 
 export default function Settings({
@@ -31,7 +33,9 @@ export default function Settings({
   darkMode,
   onSaveConfig,
   onRestoreBackup,
-  fullState
+  fullState,
+  onSyncSheets,
+  isSyncingSheets
 }: SettingsProps) {
   const [companyName, setCompanyName] = useState(config.companyName || '');
   const [logoUrl, setLogoUrl] = useState(config.logoUrl || '');
@@ -39,6 +43,7 @@ export default function Settings({
   const [sessionTimeout, setSessionTimeout] = useState(config.sessionTimeoutMinutes || 30);
   const [rowsPerPage, setRowsPerPage] = useState(config.rowsPerPage || 10);
   const [appsScriptUrl, setAppsScriptUrl] = useState(config.googleAppsScriptUrl || '');
+  const [sheetsSyncUrl, setSheetsSyncUrl] = useState(config.googleSheetsSyncUrl || 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQcMpLh93RfKdkQ6mGju40CgMTaz7RhBP7S_5LiNWF1BY0ZigqO8dpZpSh1gtx_oAiDtIyXX8Jc-gbC/pubhtml');
 
   const [copied, setCopied] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
@@ -52,7 +57,8 @@ export default function Settings({
       primaryColor,
       sessionTimeoutMinutes: Number(sessionTimeout),
       rowsPerPage: Number(rowsPerPage),
-      googleAppsScriptUrl: appsScriptUrl
+      googleAppsScriptUrl: appsScriptUrl,
+      googleSheetsSyncUrl: sheetsSyncUrl
     });
     setIsSaved(true);
     setTimeout(() => setIsSaved(false), 3000);
@@ -366,9 +372,46 @@ function deleteItem(tableName, id) {
               </div>
 
               <div className="sm:col-span-2">
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <FileCode size={14} className="text-emerald-500" />
+                    <span>Link Publicado do Google Sheets (Sincronização Direta)</span>
+                  </span>
+                  <span className="text-emerald-500 text-[10px] font-bold flex items-center gap-0.5">
+                    <Wifi size={10} /> Auto-Sync Ativo
+                  </span>
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="url"
+                    placeholder="https://docs.google.com/spreadsheets/d/e/.../pubhtml"
+                    value={sheetsSyncUrl}
+                    onChange={(e) => setSheetsSyncUrl(e.target.value)}
+                    className={`flex-1 px-3 py-2 border rounded-lg text-sm font-mono ${
+                      darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-800'
+                    }`}
+                  />
+                  {onSyncSheets && (
+                    <button
+                      type="button"
+                      onClick={() => onSyncSheets(sheetsSyncUrl)}
+                      disabled={isSyncingSheets}
+                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold rounded-lg text-xs shadow-md shrink-0 cursor-pointer flex items-center gap-1.5 transition-all disabled:opacity-50"
+                    >
+                      <RefreshCw size={14} className={isSyncingSheets ? 'animate-spin' : ''} />
+                      <span>{isSyncingSheets ? 'Sincronizando...' : 'Sincronizar Agora'}</span>
+                    </button>
+                  )}
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1">
+                  Formatos aceitos: Link de publicação web (pubhtml/csv) ou link de compartilhamento da planilha. As colunas devem seguir: A=CONVÊNIO, B=USUÁRIO, C=SENHA, D=BANCO, E=LINK DA GESTORA.
+                </p>
+              </div>
+
+              <div className="sm:col-span-2">
                 <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1">
-                  <span>Google Apps Script Web App URL</span>
-                  <span className="text-emerald-500 text-[10px] lowercase font-bold flex items-center gap-0.5">
+                  <span>Google Apps Script Web App URL (Opcional - Bi-direcional)</span>
+                  <span className="text-blue-500 text-[10px] lowercase font-bold flex items-center gap-0.5">
                     <Wifi size={10} /> sheets-live
                   </span>
                 </label>
@@ -381,7 +424,7 @@ function deleteItem(tableName, id) {
                     darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-800'
                   }`}
                 />
-                <p className="text-[10px] text-slate-400 mt-1">Conecte o sistema diretamente à sua planilha do Google Sheets. Veja os passos ao lado.</p>
+                <p className="text-[10px] text-slate-400 mt-1">Conecte o sistema via Apps Script se quiser enviar edições de volta para a planilha em tempo real. Veja os passos ao lado.</p>
               </div>
             </div>
 

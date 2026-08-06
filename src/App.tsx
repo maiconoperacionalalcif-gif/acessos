@@ -9,7 +9,11 @@ import {
   HelpCircle,
   Wifi,
   Sparkles,
-  ChevronRight
+  ChevronRight,
+  CheckCircle2,
+  AlertTriangle,
+  RefreshCw,
+  FileSpreadsheet
 } from 'lucide-react';
 import { api, FullDatabase } from './lib/api';
 import { User, Covenant, System, Login, HistoryLog, SystemConfig } from './types';
@@ -67,6 +71,14 @@ export default function App() {
   const [usernameInput, setUsernameInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
   const [loginError, setLoginError] = useState('');
+
+  // Google Sheets Direct Sync state
+  const [isSyncingSheets, setIsSyncingSheets] = useState(false);
+  const [syncResult, setSyncResult] = useState<{
+    success: boolean;
+    stats?: { covenantsCreated: number; loginsCreated: number; loginsUpdated: number; totalProcessed: number };
+    error?: string;
+  } | null>(null);
 
   // Fetch full database from Express / Apps Script proxy
   const fetchDatabase = useCallback(async () => {
@@ -429,6 +441,30 @@ export default function App() {
     }
   };
 
+  // Google Sheets Direct Sync trigger
+  const handleSyncGoogleSheets = async (customUrl?: string) => {
+    setIsSyncingSheets(true);
+    setSyncResult(null);
+    try {
+      const res = await api.syncGoogleSheets(customUrl);
+      if (res.success && res.database) {
+        setDb(res.database);
+        setSyncResult({
+          success: true,
+          stats: res.stats
+        });
+      }
+    } catch (err: any) {
+      console.error(err);
+      setSyncResult({
+        success: false,
+        error: err.message || 'Erro ao sincronizar com a planilha do Google Sheets.'
+      });
+    } finally {
+      setIsSyncingSheets(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-200">
@@ -569,11 +605,16 @@ export default function App() {
               <span>{config.companyName || 'Access Manager'}</span>
             </span>
 
-            {/* Quick Spreadsheet connection visual indicator */}
-            <div className="hidden sm:flex items-center gap-1 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 px-2.5 py-1 rounded-full text-[10px] font-bold">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping shrink-0" />
-              <span>Conexão Sheets Ativa</span>
-            </div>
+            {/* Quick Spreadsheet sync button in header */}
+            <button
+              onClick={() => handleSyncGoogleSheets()}
+              disabled={isSyncingSheets}
+              className="hidden sm:flex items-center gap-1.5 bg-emerald-50 dark:bg-emerald-950/30 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 px-3 py-1.5 rounded-full text-[11px] font-bold cursor-pointer transition-all disabled:opacity-50"
+              title="Clique para sincronizar com sua Planilha Google Sheets"
+            >
+              <RefreshCw size={12} className={isSyncingSheets ? "animate-spin text-emerald-600" : "text-emerald-600"} />
+              <span>{isSyncingSheets ? "Sincronizando..." : "Sincronizar Google Sheets"}</span>
+            </button>
           </div>
 
           <div className="flex items-center gap-4">
@@ -650,6 +691,8 @@ export default function App() {
                 onReserve={handleReserveLogin}
                 onRelease={handleReleaseLogin}
                 onLogAction={(actionType, targetId, targetName) => handleLogAction(actionType, 'Login', targetId, targetName)}
+                onSyncGoogleSheets={() => handleSyncGoogleSheets()}
+                isSyncingSheets={isSyncingSheets}
               />
             )}
 
@@ -679,11 +722,82 @@ export default function App() {
                 onSaveConfig={handleSaveConfig}
                 onRestoreBackup={handleRestoreBackup}
                 fullState={db}
+                onSyncSheets={(url) => handleSyncGoogleSheets(url)}
+                isSyncingSheets={isSyncingSheets}
               />
             )}
 
           </div>
         </main>
+
+        {/* Sync Result Stats Modal */}
+        {syncResult && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
+            <div className={`w-full max-w-md p-6 rounded-2xl shadow-2xl border ${
+              darkMode ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-100 text-slate-800'
+            }`}>
+              <div className="flex items-center gap-3 mb-4">
+                {syncResult.success ? (
+                  <div className="p-3 bg-emerald-100 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 rounded-2xl">
+                    <CheckCircle2 size={28} />
+                  </div>
+                ) : (
+                  <div className="p-3 bg-red-100 dark:bg-red-950/50 text-red-600 dark:text-red-400 rounded-2xl">
+                    <AlertTriangle size={28} />
+                  </div>
+                )}
+                <div>
+                  <h3 className="font-display font-bold text-lg leading-snug">
+                    {syncResult.success ? "Planilha Sincronizada!" : "Falha na Sincronização"}
+                  </h3>
+                  <p className="text-xs text-slate-400">Google Sheets Link Sync</p>
+                </div>
+              </div>
+
+              {syncResult.success && syncResult.stats && (
+                <div className="space-y-4 mb-6">
+                  <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                    Os dados da sua planilha foram importados e sincronizados com o banco do sistema:
+                  </p>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/50">
+                      <span className="block text-[10px] text-slate-400 uppercase font-bold">Total Lidos</span>
+                      <span className="text-lg font-extrabold text-blue-600 dark:text-blue-400">{syncResult.stats.totalProcessed}</span>
+                    </div>
+                    <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/50">
+                      <span className="block text-[10px] text-slate-400 uppercase font-bold">Novos Logins</span>
+                      <span className="text-lg font-extrabold text-emerald-600 dark:text-emerald-400">{syncResult.stats.loginsCreated}</span>
+                    </div>
+                    <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/50">
+                      <span className="block text-[10px] text-slate-400 uppercase font-bold">Logins Atualizados</span>
+                      <span className="text-lg font-extrabold text-amber-600 dark:text-amber-400">{syncResult.stats.loginsUpdated}</span>
+                    </div>
+                    <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/50">
+                      <span className="block text-[10px] text-slate-400 uppercase font-bold">Novos Convênios</span>
+                      <span className="text-lg font-extrabold text-purple-600 dark:text-purple-400">{syncResult.stats.covenantsCreated}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {syncResult.error && (
+                <div className="p-3.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 text-xs mb-6 leading-relaxed">
+                  {syncResult.error}
+                </div>
+              )}
+
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setSyncResult(null)}
+                  className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white rounded-xl text-xs font-bold shadow-md cursor-pointer transition-all"
+                >
+                  Entendido
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
       </div>
     </div>

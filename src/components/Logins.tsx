@@ -23,7 +23,8 @@ import {
   Clock,
   UserCheck,
   FileSpreadsheet,
-  Settings
+  Settings,
+  RefreshCw
 } from 'lucide-react';
 import { Login, Covenant, System, User, LoginStatus } from '../types';
 import * as XLSX from 'xlsx';
@@ -40,6 +41,8 @@ interface LoginsProps {
   onRelease: (loginId: string) => void;
   onLogAction: (actionType: 'Visualizar Senha' | 'Copiar Senha' | 'Copiar Usuário' | 'Abrir Sistema', targetId: string, targetName: string) => void;
   initialSystemFilterId?: string; // from dashboard favorite link
+  onSyncGoogleSheets?: () => void;
+  isSyncingSheets?: boolean;
 }
 
 export default function Logins({
@@ -53,7 +56,9 @@ export default function Logins({
   onReserve,
   onRelease,
   onLogAction,
-  initialSystemFilterId
+  initialSystemFilterId,
+  onSyncGoogleSheets,
+  isSyncingSheets
 }: LoginsProps) {
   const isOperator = currentUser?.role === 'Operador';
   const isSupervisor = currentUser?.role === 'Supervisor';
@@ -300,6 +305,18 @@ export default function Logins({
         </div>
         
         <div className="flex items-center gap-2">
+          {onSyncGoogleSheets && (
+            <button
+              onClick={onSyncGoogleSheets}
+              disabled={isSyncingSheets}
+              className="flex items-center gap-2 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-lg text-sm font-semibold shadow-xs cursor-pointer transition-all disabled:opacity-50"
+              title="Sincronizar logins diretamente da sua Planilha Google Sheets"
+            >
+              <RefreshCw size={16} className={isSyncingSheets ? 'animate-spin' : ''} />
+              <span>{isSyncingSheets ? 'Sincronizando...' : 'Sincronizar Planilha'}</span>
+            </button>
+          )}
+
           <button
             onClick={handleExportExcel}
             className={`flex items-center gap-2 px-3.5 py-2 border rounded-lg text-sm font-semibold cursor-pointer transition-colors ${
