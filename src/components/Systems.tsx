@@ -136,7 +136,7 @@ export default function Systems({
   const openNewModal = () => {
     setEditingSystem({
       id: `sys-${Date.now()}`,
-      covenantId: covenants[0]?.id || '',
+      covenantId: '',
       name: '',
       description: '',
       url: '',
@@ -154,7 +154,7 @@ export default function Systems({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (editingSystem && editingSystem.name && editingSystem.covenantId) {
+    if (editingSystem && editingSystem.name) {
       onSave(editingSystem as System);
       setIsModalOpen(false);
       setEditingSystem(null);
@@ -164,10 +164,10 @@ export default function Systems({
   // Export to Excel
   const handleExportExcel = () => {
     const dataToExport = sortedSystems.map(s => {
-      const cov = covenants.find(c => c.id === s.covenantId);
+      const cov = s.covenantId ? covenants.find(c => c.id === s.covenantId) : null;
       return {
-        Nome: s.name,
-        Convênio: cov ? cov.name : 'Nenhum',
+        Gestora: s.name,
+        Convênio: cov ? cov.name : 'Uso Global',
         Descrição: s.description,
         URL: s.url,
         Observações: s.observations,
@@ -177,8 +177,8 @@ export default function Systems({
 
     const ws = XLSX.utils.json_to_sheet(dataToExport);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Sistemas");
-    XLSX.writeFile(wb, `sistemas_export_${Date.now()}.xlsx`);
+    XLSX.utils.book_append_sheet(wb, ws, "Gestoras");
+    XLSX.writeFile(wb, `gestoras_export_${Date.now()}.xlsx`);
   };
 
   return (
@@ -186,8 +186,8 @@ export default function Systems({
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl md:text-2xl font-display font-bold tracking-tight">Sistemas</h2>
-          <p className="text-sm text-slate-400 dark:text-slate-500 font-medium">Configure e organize os portais de consulta e digitação vinculados aos convênios.</p>
+          <h2 className="text-xl md:text-2xl font-display font-bold tracking-tight">Gestoras (Sistemas)</h2>
+          <p className="text-sm text-slate-400 dark:text-slate-500 font-medium">Cadastre e gerencie as Gestoras de Margem (ex: ConsigX, Zetasoft, Neoconsig) utilizadas em diversos convênios.</p>
         </div>
         
         <div className="flex items-center gap-2">
@@ -209,7 +209,7 @@ export default function Systems({
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold shadow-md transition-colors cursor-pointer"
             >
               <Plus size={16} />
-              <span>Novo Sistema</span>
+              <span>Nova Gestora</span>
             </button>
           )}
         </div>
@@ -225,7 +225,7 @@ export default function Systems({
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
-            placeholder="Pesquisar sistema por nome..."
+            placeholder="Pesquisar gestora por nome..."
             value={searchTerm}
             onChange={(e) => {
               setSearchTerm(e.target.value);
@@ -563,7 +563,7 @@ export default function Systems({
           }`}>
             <div className="flex items-center justify-between border-b pb-3 mb-4 dark:border-slate-800">
               <h3 className="font-display font-bold text-lg">
-                {canEdit ? (editingSystem.name ? 'Editar Sistema' : 'Cadastrar Sistema') : 'Visualizar Sistema'}
+                {canEdit ? (editingSystem.name ? 'Editar Gestora' : 'Cadastrar Gestora') : 'Visualizar Gestora'}
               </h3>
               <button 
                 onClick={() => setIsModalOpen(false)}
@@ -576,12 +576,12 @@ export default function Systems({
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="col-span-2">
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Nome do Sistema</label>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Nome da Gestora</label>
                   <input
                     type="text"
                     required
                     disabled={!canEdit}
-                    placeholder="Ex: SouGov, Consiglog, Dataprev"
+                    placeholder="Ex: ConsigX, Zetasoft, Neoconsig, Dataprev"
                     value={editingSystem.name || ''}
                     onChange={(e) => setEditingSystem({ ...editingSystem, name: e.target.value })}
                     className={`w-full px-3 py-2 border rounded-lg text-sm ${
@@ -591,27 +591,26 @@ export default function Systems({
                 </div>
 
                 <div className="col-span-2">
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 font-sans">Convênio Vinculado</label>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 font-sans">Convênio de Origem (Opcional)</label>
                   <select
                     disabled={!canEdit}
-                    required
                     value={editingSystem.covenantId || ''}
                     onChange={(e) => setEditingSystem({ ...editingSystem, covenantId: e.target.value })}
                     className={`w-full px-3 py-2 border rounded-lg text-sm ${
                       darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-800'
                     }`}
                   >
-                    <option value="" disabled>Selecione um Convênio...</option>
+                    <option value="">Uso Global em Diversos Convênios</option>
                     {covenants.map(cov => <option key={cov.id} value={cov.id}>{cov.name}</option>)}
                   </select>
                 </div>
 
                 <div className="col-span-2">
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Link de Acesso (URL)</label>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Link Base / URL da Gestora</label>
                   <input
                     type="url"
                     disabled={!canEdit}
-                    placeholder="https://exemplo.com.br"
+                    placeholder="https://saec.consigx.com.br/Login.aspx"
                     value={editingSystem.url || ''}
                     onChange={(e) => setEditingSystem({ ...editingSystem, url: e.target.value })}
                     className={`w-full px-3 py-2 border rounded-lg text-sm ${

@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Sun, 
   Moon, 
-  Search as SearchIcon, 
   LogOut, 
   Building2, 
   Lock, 
@@ -21,13 +20,9 @@ import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, on
 import Navigation from './components/Navigation';
 import Dashboard from './components/Dashboard';
 import Covenants from './components/Covenants';
-import Systems from './components/Systems';
 import Logins from './components/Logins';
 import Users from './components/Users';
-import Search from './components/Search';
 import History from './components/History';
-import Reports from './components/Reports';
-import Import from './components/Import';
 import Settings from './components/Settings';
 
 const MOCK_DATABASE: FullDatabase = {
@@ -536,35 +531,6 @@ export default function App() {
               Acessar Painel Seguro
             </button>
           </form>
-
-          {/* Quick Demo Accounts Selection */}
-          <div className="border-t pt-5 dark:border-slate-800 space-y-2">
-            <div className="flex items-center gap-1.5 text-xs text-slate-400 font-semibold mb-1">
-              <Sparkles size={12} className="text-blue-500" />
-              <span>Contas de demonstração para homologação:</span>
-            </div>
-
-            <div className="grid grid-cols-3 gap-2">
-              <button
-                onClick={() => handleQuickLogin('Administrador')}
-                className="py-2 px-1 border dark:border-slate-800 rounded-lg text-[10px] font-bold bg-slate-50 dark:bg-slate-800 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200/40 cursor-pointer dark:text-slate-300 dark:hover:bg-slate-700 transition-colors"
-              >
-                Admin
-              </button>
-              <button
-                onClick={() => handleQuickLogin('Supervisor')}
-                className="py-2 px-1 border dark:border-slate-800 rounded-lg text-[10px] font-bold bg-slate-50 dark:bg-slate-800 hover:bg-green-50 hover:text-green-600 hover:border-green-200/40 cursor-pointer dark:text-slate-300 dark:hover:bg-slate-700 transition-colors"
-              >
-                Supervisor
-              </button>
-              <button
-                onClick={() => handleQuickLogin('Operador')}
-                className="py-2 px-1 border dark:border-slate-800 rounded-lg text-[10px] font-bold bg-slate-50 dark:bg-slate-800 hover:bg-violet-50 hover:text-violet-600 hover:border-violet-200/40 cursor-pointer dark:text-slate-300 dark:hover:bg-slate-700 transition-colors"
-              >
-                Operador
-              </button>
-            </div>
-          </div>
         </div>
       </div>
     );
@@ -612,15 +578,6 @@ export default function App() {
 
           <div className="flex items-center gap-4">
             
-            {/* Quick global search trigger icon */}
-            <button
-              onClick={() => handleNavigateToTab('search')}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer transition-colors"
-              title="Pesquisa Global"
-            >
-              <SearchIcon size={18} />
-            </button>
-
             {/* Light / Dark Mode toggle button */}
             <button
               onClick={() => setDarkMode(!darkMode)}
@@ -680,19 +637,6 @@ export default function App() {
               />
             )}
 
-            {currentTab === 'systems' && db && (
-              <Systems
-                systems={db.systems}
-                covenants={db.covenants}
-                favorites={db.favorites}
-                currentUser={currentUser}
-                darkMode={darkMode}
-                onSave={(item) => handleSaveItem('systems', item)}
-                onDelete={(id) => handleDeleteItem('systems', id)}
-                onToggleFavorite={handleToggleFavorite}
-              />
-            )}
-
             {currentTab === 'logins' && db && (
               <Logins
                 logins={db.logins}
@@ -720,43 +664,11 @@ export default function App() {
               />
             )}
 
-            {currentTab === 'search' && db && (
-              <Search
-                covenants={db.covenants}
-                systems={db.systems}
-                logins={db.logins}
-                currentUser={currentUser}
-                darkMode={darkMode}
-                onLogAction={(actionType, targetId, targetName) => {
-                  const targetType = actionType === 'Abrir Sistema' ? 'System' : 'Login';
-                  handleLogAction(actionType, targetType, targetId, targetName);
-                }}
-                onNavigateToTab={handleNavigateToTab}
-              />
-            )}
-
             {currentTab === 'history' && db && (
               <History
                 logs={db.historyLogs}
                 currentUser={currentUser}
                 darkMode={darkMode}
-              />
-            )}
-
-            {currentTab === 'reports' && db && (
-              <Reports
-                db={db}
-                darkMode={darkMode}
-              />
-            )}
-
-            {currentTab === 'import' && db && (
-              <Import
-                covenants={db.covenants}
-                systems={db.systems}
-                currentUser={currentUser}
-                darkMode={darkMode}
-                onImportLogins={handleImportLogins}
               />
             )}
 

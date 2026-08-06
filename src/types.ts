@@ -18,19 +18,20 @@ export interface Covenant {
   name: string;
   category: CovenantCategory;
   state: string;
-  city: string;
-  organ: string;
-  manager: string;
+  managerUrl?: string; // Link da Gestora
   observations: string;
   status: 'Ativo' | 'Inativo';
+  city?: string;
+  organ?: string;
+  manager?: string;
 }
 
 export interface System {
   id: string;
-  covenantId: string; // Belongs to a covenant
-  name: string;
+  covenantId?: string; // Optional, Gestoras can be global
+  name: string; // e.g. Consigx, Zetasoft, Neoconsig
   description: string;
-  url: string;
+  url: string; // Base URL / Portal
   icon: string; // Lucide icon name
   observations: string;
   status: 'Ativo' | 'Inativo';
@@ -42,6 +43,7 @@ export interface Login {
   id: string;
   covenantId: string;
   systemId: string;
+  url?: string; // Specific portal link (e.g., https://saec.consigx.com.br/Login.aspx)
   bank: string;
   shop: string;
   username: string;

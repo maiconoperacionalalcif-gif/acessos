@@ -114,6 +114,7 @@ export default function Logins({
   // Form Modal
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingLogin, setEditingLogin] = useState<Partial<Login> | null>(null);
+  const [loginToDelete, setLoginToDelete] = useState<Login | null>(null);
 
   // Security Toggles
   const [revealedPasswords, setRevealedPasswords] = useState<{ [id: string]: boolean }>({});
@@ -193,6 +194,25 @@ export default function Logins({
   }, [sortedLogins, currentPage, rowsPerPage]);
 
   const totalPages = Math.ceil(sortedLogins.length / rowsPerPage) || 1;
+
+  // Auto-detect system/gestora from login URL
+  const handleLoginUrlChange = (newUrl: string) => {
+    let autoSystemId = editingLogin?.systemId || '';
+    if (newUrl && systems && systems.length > 0) {
+      const lower = newUrl.toLowerCase();
+      const matched = systems.find(s => {
+        if (!s.name) return false;
+        const sysName = s.name.toLowerCase();
+        if (sysName.length >= 3 && lower.includes(sysName)) return true;
+        if (s.url && lower.includes(s.url.toLowerCase().replace('https://', '').replace('http://', ''))) return true;
+        return false;
+      });
+      if (matched) {
+        autoSystemId = matched.id;
+      }
+    }
+    setEditingLogin(prev => prev ? { ...prev, url: newUrl, systemId: autoSystemId } : null);
+  };
 
   // New/Edit Modal Handlers
   const openNewModal = () => {
@@ -564,23 +584,30 @@ export default function Logins({
                       </td>
                     )}
 
-                    {/* System Name */}
+                    {/* Gestora / System Name */}
                     {visibleColumns.system && (
                       <td className="py-3.5 px-4 text-xs font-semibold">
                         {sys ? (
-                          <div className="flex items-center gap-1 text-blue-600 dark:text-blue-400">
-                            <span>{sys.name}</span>
-                            {sys.url && (
-                              <a 
-                                href={sys.url} 
-                                target="_blank" 
-                                rel="noopener noreferrer"
-                                onClick={() => onLogAction('Abrir Sistema', sys.id, sys.name)}
-                                className="hover:text-blue-800 cursor-pointer"
-                                title="Abrir Link do Sistema"
-                              >
-                                <ExternalLink size={10} />
-                              </a>
+                          <div className="space-y-0.5">
+                            <div className="flex items-center gap-1.5 text-blue-600 dark:text-blue-400">
+                              <span>{sys.name}</span>
+                              {(login.url || sys.url) && (
+                                <a 
+                                  href={login.url || sys.url} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer"
+                                  onClick={() => onLogAction('Abrir Sistema', sys.id, `${sys.name} (${login.username})`)}
+                                  className="hover:text-blue-800 cursor-pointer p-0.5"
+                                  title={`Abrir Portal ${sys.name}`}
+                                >
+                                  <ExternalLink size={11} />
+                                </a>
+                              )}
+                            </div>
+                            {login.url && (
+                              <p className="text-[10px] text-slate-400 dark:text-slate-500 font-mono truncate max-w-[160px]" title={login.url}>
+                                {login.url.replace('https://', '').replace('http://', '')}
+                              </p>
                             )}
                           </div>
                         ) : <span className="text-red-500">-</span>}
@@ -717,11 +744,7 @@ export default function Logins({
                           
                           {canDelete && (
                             <button
-                              onClick={() => {
-                                if (window.confirm(`Tem certeza que deseja excluir as credenciais do usuário "${login.username}"?`)) {
-                                  onDelete(login.id);
-                                }
-                              }}
+                              onClick={() => setLoginToDelete(login)}
                               className="p-1 rounded hover:bg-red-50 dark:hover:bg-red-950/20 text-red-500 cursor-pointer"
                               title="Excluir"
                             >
@@ -819,6 +842,31 @@ export default function Logins({
               
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 
+                {/* Link do Portal de Acesso */}
+                <div className="col-span-1 md:col-span-3">
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 font-sans">
+                    Link do Portal / Acesso (Ex: https://saec.consigx.com.br/Login.aspx)
+                  </label>
+                  <input
+                    type="url"
+                    disabled={!canEdit}
+                    placeholder="https://saec.consigx.com.br/Login.aspx"
+                    value={editingLogin.url || ''}
+                    onChange={(e) => handleLoginUrlChange(e.target.value)}
+                    className={`w-full px-3 py-2 border rounded-lg text-sm ${
+                      darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-800'
+                    }`}
+                  />
+                  {editingLogin.url && editingLogin.systemId && (() => {
+                    const matchedSys = systems.find(s => s.id === editingLogin.systemId);
+                    return matchedSys ? (
+                      <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold mt-1 flex items-center gap-1">
+                        ✨ Vinculado automaticamente à Gestora <strong>{matchedSys.name}</strong> pelo link!
+                      </p>
+                    ) : null;
+                  })()}
+                </div>
+
                 {/* Covenant Dropdown */}
                 <div>
                   <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 font-sans">Convênio</label>
@@ -836,9 +884,9 @@ export default function Logins({
                   </select>
                 </div>
 
-                {/* System Dropdown */}
+                {/* Gestora / Sistema Dropdown */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 font-sans">Sistema</label>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 font-sans">Gestora / Sistema</label>
                   <select
                     disabled={!canEdit}
                     required
@@ -848,7 +896,7 @@ export default function Logins({
                       darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-800'
                     }`}
                   >
-                    <option value="" disabled>Selecione...</option>
+                    <option value="" disabled>Selecione uma Gestora...</option>
                     {systems.map(sys => <option key={sys.id} value={sys.id}>{sys.name}</option>)}
                   </select>
                 </div>
@@ -1072,6 +1120,51 @@ export default function Logins({
                 )}
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Confirmação de Exclusão de Login */}
+      {loginToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-fade-in">
+          <div className={`w-full max-w-md p-6 rounded-2xl shadow-2xl border ${
+            darkMode ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-100 text-slate-800'
+          }`}>
+            <div className="flex items-center gap-3 mb-4 text-red-500">
+              <div className="p-3 bg-red-100 dark:bg-red-950/40 rounded-full">
+                <Trash2 size={24} />
+              </div>
+              <div>
+                <h3 className="font-display font-bold text-lg">Excluir Login</h3>
+                <p className="text-xs text-slate-400">Esta ação não poderá ser desfeita.</p>
+              </div>
+            </div>
+
+            <p className="text-sm mb-6 text-slate-600 dark:text-slate-300">
+              Deseja realmente excluir as credenciais do usuário <strong className="text-slate-900 dark:text-white">"{loginToDelete.username}"</strong> ({loginToDelete.bank})?
+            </p>
+
+            <div className="flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setLoginToDelete(null)}
+                className={`px-4 py-2 rounded-lg text-sm font-semibold border transition-colors cursor-pointer ${
+                  darkMode ? 'border-slate-700 hover:bg-slate-800 text-slate-300' : 'border-slate-200 hover:bg-slate-100 text-slate-700'
+                }`}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onDelete(loginToDelete.id);
+                  setLoginToDelete(null);
+                }}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-semibold shadow-md transition-colors cursor-pointer"
+              >
+                Sim, Excluir
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -12,7 +12,8 @@ import {
   ChevronUp,
   Filter,
   Eye,
-  Settings
+  Settings,
+  ExternalLink
 } from 'lucide-react';
 import { Covenant, CovenantCategory, User } from '../types';
 import * as XLSX from 'xlsx';
@@ -37,13 +38,16 @@ export default function Covenants({
   const isAdmin = currentUser?.role === 'Administrador';
 
   const canEdit = isAdmin || isSupervisor;
-  const canDelete = isAdmin;
+  const canDelete = isAdmin || isSupervisor;
 
   // State
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('Todos');
   const [selectedStatus, setSelectedStatus] = useState<string>('Todos');
   const [selectedState, setSelectedState] = useState<string>('Todos');
+  
+  // Deleting Covenant Modal state
+  const [covenantToDelete, setCovenantToDelete] = useState<Covenant | null>(null);
   
   // Sorting
   const [sortField, setSortField] = useState<keyof Covenant>('name');
@@ -58,10 +62,9 @@ export default function Covenants({
     name: true,
     category: true,
     state: true,
-    city: true,
-    organ: true,
-    manager: true,
-    status: true
+    managerUrl: true,
+    status: true,
+    observations: true
   });
   const [showColManager, setShowColManager] = useState(false);
 
@@ -93,9 +96,10 @@ export default function Covenants({
     return covenants.filter(cov => {
       const matchSearch = 
         cov.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        cov.city.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        cov.organ.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        cov.manager.toLowerCase().includes(searchTerm.toLowerCase());
+        (cov.state && cov.state.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (cov.managerUrl && cov.managerUrl.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (cov.manager && cov.manager.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (cov.observations && cov.observations.toLowerCase().includes(searchTerm.toLowerCase()));
 
       const matchCategory = selectedCategory === 'Todos' || cov.category === selectedCategory;
       const matchStatus = selectedStatus === 'Todos' || cov.status === selectedStatus;
@@ -135,9 +139,7 @@ export default function Covenants({
       name: '',
       category: 'Federal',
       state: '',
-      city: '',
-      organ: '',
-      manager: '',
+      managerUrl: '',
       observations: '',
       status: 'Ativo'
     });
@@ -161,14 +163,12 @@ export default function Covenants({
   // Export to Excel
   const handleExportExcel = () => {
     const dataToExport = sortedCovenants.map(c => ({
-      Nome: c.name,
-      Categoria: c.category,
-      Estado: c.state,
-      Cidade: c.city,
-      Órgão: c.organ,
-      Gestora: c.manager,
-      Observações: c.observations,
-      Status: c.status
+      'Nome do Convênio': c.name,
+      'Categoria': c.category,
+      'Estado': c.state,
+      'Link da Gestora': c.managerUrl || c.manager || '',
+      'Status': c.status,
+      'Observações': c.observations
     }));
 
     const ws = XLSX.utils.json_to_sheet(dataToExport);
@@ -327,13 +327,12 @@ export default function Covenants({
                     className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                   />
                   <span className="capitalize text-xs">{
-                    col === 'name' ? 'Nome' :
+                    col === 'name' ? 'Nome do Convênio' :
                     col === 'category' ? 'Categoria' :
                     col === 'state' ? 'Estado' :
-                    col === 'city' ? 'Cidade' :
-                    col === 'organ' ? 'Órgão' :
-                    col === 'manager' ? 'Gestora' :
-                    col === 'status' ? 'Status' : col
+                    col === 'managerUrl' ? 'Link da Gestora' :
+                    col === 'status' ? 'Status' :
+                    col === 'observations' ? 'Observações' : col
                   }</span>
                 </label>
               ))}
@@ -354,7 +353,7 @@ export default function Covenants({
               {visibleColumns.name && (
                 <th onClick={() => handleSort('name')} className="py-3 px-4 cursor-pointer hover:text-blue-500">
                   <div className="flex items-center gap-1">
-                    <span>Nome</span>
+                    <span>Nome do Convênio</span>
                     {sortField === 'name' && (sortDirection === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />)}
                   </div>
                 </th>
@@ -375,19 +374,8 @@ export default function Covenants({
                   </div>
                 </th>
               )}
-              {visibleColumns.city && (
-                <th onClick={() => handleSort('city')} className="py-3 px-4 cursor-pointer hover:text-blue-500">
-                  <div className="flex items-center gap-1">
-                    <span>Cidade</span>
-                    {sortField === 'city' && (sortDirection === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />)}
-                  </div>
-                </th>
-              )}
-              {visibleColumns.organ && (
-                <th className="py-3 px-4">Órgão</th>
-              )}
-              {visibleColumns.manager && (
-                <th className="py-3 px-4">Gestora</th>
+              {visibleColumns.managerUrl && (
+                <th className="py-3 px-4">Link da Gestora</th>
               )}
               {visibleColumns.status && (
                 <th onClick={() => handleSort('status')} className="py-3 px-4 cursor-pointer hover:text-blue-500">
@@ -397,13 +385,16 @@ export default function Covenants({
                   </div>
                 </th>
               )}
+              {visibleColumns.observations && (
+                <th className="py-3 px-4">Observações</th>
+              )}
               <th className="py-3 px-4 text-right">Ações</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
             {paginatedCovenants.length === 0 ? (
               <tr>
-                <td colSpan={8} className="py-10 text-center text-slate-400 dark:text-slate-500">
+                <td colSpan={7} className="py-10 text-center text-slate-400 dark:text-slate-500">
                   Nenhum convênio encontrado para os filtros selecionados.
                 </td>
               </tr>
@@ -430,22 +421,31 @@ export default function Covenants({
                   )}
                   {visibleColumns.state && (
                     <td className="py-3.5 px-4 text-xs font-mono font-medium">
-                      {cov.state}
+                      {cov.state || '-'}
                     </td>
                   )}
-                  {visibleColumns.city && (
-                    <td className="py-3.5 px-4 text-xs text-slate-500 dark:text-slate-400">
-                      {cov.city}
-                    </td>
-                  )}
-                  {visibleColumns.organ && (
+                  {visibleColumns.managerUrl && (
                     <td className="py-3.5 px-4 text-xs">
-                      {cov.organ || '-'}
-                    </td>
-                  )}
-                  {visibleColumns.manager && (
-                    <td className="py-3.5 px-4 text-xs">
-                      {cov.manager || '-'}
+                      {(cov.managerUrl || cov.manager) ? (
+                        <div className="flex items-center gap-1.5 text-blue-600 dark:text-blue-400 font-medium">
+                          <span className="truncate max-w-[180px]">
+                            {cov.managerUrl ? cov.managerUrl.replace('https://', '').replace('http://', '') : cov.manager}
+                          </span>
+                          {cov.managerUrl && (
+                            <a
+                              href={cov.managerUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-0.5 hover:text-blue-800 dark:hover:text-blue-300 transition-colors"
+                              title={`Abrir link da gestora: ${cov.managerUrl}`}
+                            >
+                              <ExternalLink size={12} />
+                            </a>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-slate-400 dark:text-slate-600">-</span>
+                      )}
                     </td>
                   )}
                   {visibleColumns.status && (
@@ -456,6 +456,11 @@ export default function Covenants({
                         <span className={`w-2 h-2 rounded-full ${cov.status === 'Ativo' ? 'bg-emerald-500' : 'bg-slate-400'}`} />
                         {cov.status}
                       </span>
+                    </td>
+                  )}
+                  {visibleColumns.observations && (
+                    <td className="py-3.5 px-4 text-xs text-slate-500 dark:text-slate-400 truncate max-w-[160px]" title={cov.observations}>
+                      {cov.observations || '-'}
                     </td>
                   )}
                   <td className="py-3.5 px-4 text-right">
@@ -480,13 +485,9 @@ export default function Covenants({
                       
                       {canDelete && (
                         <button
-                          onClick={() => {
-                            if (window.confirm(`Excluir o convênio "${cov.name}" permanentemente?`)) {
-                              onDelete(cov.id);
-                            }
-                          }}
+                          onClick={() => setCovenantToDelete(cov)}
                           className="p-1 rounded-md hover:bg-red-50 dark:hover:bg-red-950/20 text-red-500 cursor-pointer"
-                          title="Excluir"
+                          title="Excluir Convênio"
                         >
                           <Trash2 size={14} />
                         </button>
@@ -578,12 +579,16 @@ export default function Covenants({
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
+                {/* 1. NOME DO CONVÊNIO */}
                 <div className="col-span-2">
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Nome do Convênio</label>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
+                    Nome do Convênio
+                  </label>
                   <input
                     type="text"
                     required
                     disabled={!canEdit}
+                    placeholder="Ex: SIAPE / SouGov, Governo de SP, Prefeitura de SP"
                     value={editingCovenant.name || ''}
                     onChange={(e) => setEditingCovenant({ ...editingCovenant, name: e.target.value })}
                     className={`w-full px-3 py-2 border rounded-lg text-sm ${
@@ -592,8 +597,11 @@ export default function Covenants({
                   />
                 </div>
 
+                {/* 2. CATEGORIA */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Categoria</label>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
+                    Categoria
+                  </label>
                   <select
                     disabled={!canEdit}
                     value={editingCovenant.category || 'Federal'}
@@ -606,12 +614,15 @@ export default function Covenants({
                   </select>
                 </div>
 
+                {/* 3. ESTADO */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Estado (UF)</label>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
+                    Estado (UF)
+                  </label>
                   <input
                     type="text"
                     disabled={!canEdit}
-                    placeholder="Ex: SP, DF, Nacional"
+                    placeholder="Ex: SP, DF, RJ, Nacional"
                     value={editingCovenant.state || ''}
                     onChange={(e) => setEditingCovenant({ ...editingCovenant, state: e.target.value })}
                     className={`w-full px-3 py-2 border rounded-lg text-sm ${
@@ -620,47 +631,28 @@ export default function Covenants({
                   />
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Cidade</label>
+                {/* 4. LINK DA GESTORA */}
+                <div className="col-span-2">
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
+                    Link da Gestora
+                  </label>
                   <input
-                    type="text"
+                    type="url"
                     disabled={!canEdit}
-                    value={editingCovenant.city || ''}
-                    onChange={(e) => setEditingCovenant({ ...editingCovenant, city: e.target.value })}
+                    placeholder="Ex: https://saec.consigx.com.br/Login.aspx"
+                    value={editingCovenant.managerUrl || ''}
+                    onChange={(e) => setEditingCovenant({ ...editingCovenant, managerUrl: e.target.value })}
                     className={`w-full px-3 py-2 border rounded-lg text-sm ${
                       darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-800'
                     }`}
                   />
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 font-sans">Órgão</label>
-                  <input
-                    type="text"
-                    disabled={!canEdit}
-                    value={editingCovenant.organ || ''}
-                    onChange={(e) => setEditingCovenant({ ...editingCovenant, organ: e.target.value })}
-                    className={`w-full px-3 py-2 border rounded-lg text-sm ${
-                      darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-800'
-                    }`}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Empresa Gestora</label>
-                  <input
-                    type="text"
-                    disabled={!canEdit}
-                    value={editingCovenant.manager || ''}
-                    onChange={(e) => setEditingCovenant({ ...editingCovenant, manager: e.target.value })}
-                    className={`w-full px-3 py-2 border rounded-lg text-sm ${
-                      darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-800'
-                    }`}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Status</label>
+                {/* 5. STATUS */}
+                <div className="col-span-2">
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
+                    Status
+                  </label>
                   <select
                     disabled={!canEdit}
                     value={editingCovenant.status || 'Ativo'}
@@ -675,13 +667,17 @@ export default function Covenants({
                 </div>
               </div>
 
+              {/* 6. OBSERVAÇÕES */}
               <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Observações</label>
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
+                  Observações
+                </label>
                 <textarea
                   disabled={!canEdit}
                   rows={3}
                   value={editingCovenant.observations || ''}
                   onChange={(e) => setEditingCovenant({ ...editingCovenant, observations: e.target.value })}
+                  placeholder="Observações adicionais sobre o convênio..."
                   className={`w-full px-3 py-2 border rounded-lg text-sm ${
                     darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-800'
                   }`}
@@ -708,6 +704,51 @@ export default function Covenants({
                 )}
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Confirmação de Exclusão de Convênio */}
+      {covenantToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-fade-in">
+          <div className={`w-full max-w-md p-6 rounded-2xl shadow-2xl border ${
+            darkMode ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-100 text-slate-800'
+          }`}>
+            <div className="flex items-center gap-3 mb-4 text-red-500">
+              <div className="p-3 bg-red-100 dark:bg-red-950/40 rounded-full">
+                <Trash2 size={24} />
+              </div>
+              <div>
+                <h3 className="font-display font-bold text-lg">Excluir Convênio</h3>
+                <p className="text-xs text-slate-400">Esta ação não poderá ser desfeita.</p>
+              </div>
+            </div>
+
+            <p className="text-sm mb-6 text-slate-600 dark:text-slate-300">
+              Deseja realmente excluir o convênio <strong className="text-slate-900 dark:text-white">"{covenantToDelete.name}"</strong>?
+            </p>
+
+            <div className="flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setCovenantToDelete(null)}
+                className={`px-4 py-2 rounded-lg text-sm font-semibold border transition-colors cursor-pointer ${
+                  darkMode ? 'border-slate-700 hover:bg-slate-800 text-slate-300' : 'border-slate-200 hover:bg-slate-100 text-slate-700'
+                }`}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onDelete(covenantToDelete.id);
+                  setCovenantToDelete(null);
+                }}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-semibold shadow-md transition-colors cursor-pointer"
+              >
+                Sim, Excluir
+              </button>
+            </div>
           </div>
         </div>
       )}

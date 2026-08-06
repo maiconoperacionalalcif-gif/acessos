@@ -134,6 +134,16 @@ let dataBase = {
       icon: "KeyRound",
       observations: "Usa captcha na tela de autenticação inicial.",
       status: "Ativo"
+    },
+    {
+      id: "sys-5",
+      covenantId: "",
+      name: "ConsigX",
+      description: "Gestora de Margem Consignável ConsigX",
+      url: "https://saec.consigx.com.br",
+      icon: "Monitor",
+      observations: "Gestora utilizada em diversos convênios estaduais e municipais.",
+      status: "Ativo"
     }
   ],
 
@@ -389,7 +399,23 @@ async function startServer() {
       }
       return { success: false, error: "Tabela não encontrada" };
     }, { table, item });
-    res.json(result);
+
+    // Guarantee local memory sync
+    const dbTable = (dataBase as any)[table];
+    if (dbTable) {
+      const existingIndex = dbTable.findIndex((x: any) => x.id === item.id);
+      if (existingIndex > -1) {
+        dbTable[existingIndex] = { ...dbTable[existingIndex], ...item };
+      } else {
+        dbTable.push(item);
+      }
+    }
+
+    const finalResult = {
+      success: result?.success ?? true,
+      database: result?.database || dataBase
+    };
+    res.json(finalResult);
   });
 
   // Delete Entity
@@ -403,7 +429,18 @@ async function startServer() {
       }
       return { success: false, error: "Tabela não encontrada" };
     }, { table, id });
-    res.json(result);
+
+    // Guarantee local memory sync
+    const dbTable = (dataBase as any)[table];
+    if (dbTable) {
+      (dataBase as any)[table] = dbTable.filter((x: any) => x.id !== id);
+    }
+
+    const finalResult = {
+      success: result?.success ?? true,
+      database: result?.database || dataBase
+    };
+    res.json(finalResult);
   });
 
   // Toggle Favorite

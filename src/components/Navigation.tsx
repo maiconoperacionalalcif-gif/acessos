@@ -2,13 +2,9 @@ import React, { useState } from 'react';
 import { 
   LayoutDashboard, 
   FileText, 
-  Monitor, 
   KeyRound, 
   Users, 
-  Search, 
   History, 
-  BarChart3, 
-  Upload, 
   Settings, 
   LogOut, 
   Sun, 
@@ -44,13 +40,9 @@ export default function Navigation({
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['Administrador', 'Supervisor', 'Operador'] },
     { id: 'covenants', label: 'Convênios', icon: FileText, roles: ['Administrador', 'Supervisor', 'Operador'] },
-    { id: 'systems', label: 'Sistemas', icon: Monitor, roles: ['Administrador', 'Supervisor', 'Operador'] },
     { id: 'logins', label: 'Logins', icon: KeyRound, roles: ['Administrador', 'Supervisor', 'Operador'] },
     { id: 'users', label: 'Usuários', icon: Users, roles: ['Administrador', 'Supervisor'] }, // Operators cannot manage users
-    { id: 'search', label: 'Pesquisa Global', icon: Search, roles: ['Administrador', 'Supervisor', 'Operador'] },
     { id: 'history', label: 'Histórico', icon: History, roles: ['Administrador', 'Supervisor'] }, // Operators cannot view history logs
-    { id: 'reports', label: 'Relatórios', icon: BarChart3, roles: ['Administrador', 'Supervisor', 'Operador'] },
-    { id: 'import', label: 'Importação', icon: Upload, roles: ['Administrador'] }, // Only admins can import
     { id: 'settings', label: 'Configurações', icon: Settings, roles: ['Administrador', 'Supervisor'] }
   ];
 

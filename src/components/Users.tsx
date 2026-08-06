@@ -42,6 +42,7 @@ export default function Users({
   // Form modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<Partial<User> | null>(null);
+  const [userToDelete, setUserToDelete] = useState<User | null>(null);
   
   // Custom states for bank input inside modal
   const [bankInput, setBankInput] = useState('');
@@ -251,11 +252,7 @@ export default function Users({
                 
                 {canDelete && user.id !== currentUser?.id && (
                   <button
-                    onClick={() => {
-                      if (window.confirm(`Excluir o usuário "${user.name}"? Isso revogará o acesso dele imediatamente.`)) {
-                        onDelete(user.id);
-                      }
-                    }}
+                    onClick={() => setUserToDelete(user)}
                     className="p-1.5 border border-red-200/50 hover:bg-red-50 dark:border-red-950/20 dark:hover:bg-red-950/20 text-red-500 rounded-lg cursor-pointer"
                     title="Excluir Usuário"
                   >
@@ -449,6 +446,44 @@ export default function Users({
                 )}
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete User Confirmation Modal */}
+      {userToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
+          <div className={`w-full max-w-md rounded-2xl border shadow-2xl p-6 ${
+            darkMode ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-100 text-slate-800'
+          }`}>
+            <h3 className="font-display font-bold text-lg mb-2 text-red-600 dark:text-red-400 flex items-center gap-2">
+              <Trash2 size={20} />
+              <span>Confirmar Exclusão</span>
+            </h3>
+            <p className="text-sm text-slate-600 dark:text-slate-300 mb-6 leading-relaxed">
+              Tem certeza que deseja excluir o usuário <strong className="text-slate-900 dark:text-white font-bold">{userToDelete.name}</strong> (@{userToDelete.username})? Isso revogará o acesso dele e removerá a conta.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setUserToDelete(null)}
+                className={`px-4 py-2 border rounded-lg text-sm font-semibold cursor-pointer ${
+                  darkMode ? 'border-slate-700 text-slate-300 hover:bg-slate-800' : 'border-slate-200 text-slate-700 hover:bg-slate-50'
+                }`}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onDelete(userToDelete.id);
+                  setUserToDelete(null);
+                }}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-semibold cursor-pointer shadow-md transition-colors"
+              >
+                Sim, Excluir Usuário
+              </button>
+            </div>
           </div>
         </div>
       )}
