@@ -12,7 +12,10 @@ import {
   Menu, 
   X,
   Building2,
-  Lock
+  Lock,
+  Landmark,
+  Ticket,
+  Inbox
 } from 'lucide-react';
 import { User, SystemConfig } from '../types';
 
@@ -24,6 +27,7 @@ interface NavigationProps {
   config: SystemConfig;
   darkMode: boolean;
   setDarkMode: (dark: boolean) => void;
+  pendingRequestsCount?: number;
 }
 
 export default function Navigation({
@@ -33,14 +37,16 @@ export default function Navigation({
   onLogout,
   config,
   darkMode,
-  setDarkMode
+  setDarkMode,
+  pendingRequestsCount = 0
 }: NavigationProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const menuItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['Administrador', 'Supervisor', 'Operador'] },
-    { id: 'covenants', label: 'Convênios', icon: FileText, roles: ['Administrador', 'Supervisor', 'Operador'] },
-    { id: 'logins', label: 'Logins', icon: KeyRound, roles: ['Administrador', 'Supervisor', 'Operador'] },
+    { id: 'operational', label: 'Central Operacional', icon: Landmark, roles: ['Administrador', 'Supervisor', 'Operador', 'Operacional'] },
+    { id: 'requests', label: 'Esteira de Solicitações', icon: Ticket, roles: ['Administrador', 'Supervisor'], badge: pendingRequestsCount },
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['Administrador', 'Supervisor'] },
+    { id: 'accesses', label: 'Acessos', icon: KeyRound, roles: ['Administrador', 'Supervisor'] },
     { id: 'users', label: 'Usuários', icon: Users, roles: ['Administrador', 'Supervisor'] }, // Operators cannot manage users
     { id: 'history', label: 'Histórico', icon: History, roles: ['Administrador', 'Supervisor'] }, // Operators cannot view history logs
     { id: 'settings', label: 'Configurações', icon: Settings, roles: ['Administrador', 'Supervisor'] }
@@ -67,7 +73,7 @@ export default function Navigation({
             </div>
           )}
           <span className="font-display font-bold text-lg tracking-tight">
-            {config.companyName || 'Access Manager'}
+            {config.companyName || 'ACESSOS ALCIF'}
           </span>
         </div>
         <div className="flex items-center gap-3">
@@ -107,7 +113,7 @@ export default function Navigation({
             )}
             <div className="flex flex-col">
               <span className="font-display font-bold text-base tracking-tight leading-none text-blue-600 dark:text-blue-400">
-                {config.companyName || 'Access Manager'}
+                {config.companyName || 'ACESSOS ALCIF'}
               </span>
               <span className="text-[10px] text-slate-400 dark:text-slate-500 font-medium uppercase mt-1 tracking-wider">
                 Consignado Portal
@@ -133,7 +139,16 @@ export default function Navigation({
                   }`}
                 >
                   <Icon size={18} className={isActive ? 'text-white' : 'text-slate-400 dark:text-slate-500'} />
-                  <span>{item.label}</span>
+                  <span className="flex-1 text-left">{item.label}</span>
+                  {item.badge !== undefined && item.badge > 0 && (
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold font-mono ${
+                      isActive 
+                        ? 'bg-white text-blue-600' 
+                        : 'bg-amber-500 text-white'
+                    }`}>
+                      {item.badge}
+                    </span>
+                  )}
                 </button>
               );
             })}

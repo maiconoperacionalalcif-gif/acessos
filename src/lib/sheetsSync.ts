@@ -172,14 +172,20 @@ export function syncCsvRowsToDatabase(db: FullDatabase, rows: string[][]): {
           name: convenioName,
           category: category,
           state: inferredState,
+          login: username || undefined,
+          password: password || undefined,
+          bank: bank || undefined,
           managerUrl: managerUrl || undefined,
           observations: "Sincronizado automaticamente da Planilha Google Sheets",
           status: "Ativo"
         };
         covenants.push(covenant);
         covenantsCreated++;
-      } else if (managerUrl && !(covenant as any).managerUrl) {
-        (covenant as any).managerUrl = managerUrl;
+      } else {
+        if (managerUrl && !(covenant as any).managerUrl) (covenant as any).managerUrl = managerUrl;
+        if (username && !covenant.login) covenant.login = username;
+        if (password && !covenant.password) covenant.password = password;
+        if (bank && !covenant.bank) covenant.bank = bank;
       }
 
       // System matching

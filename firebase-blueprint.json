@@ -60,6 +60,26 @@
         "reservedBy": "string?",
         "reservedAt": "string?"
       }
+    },
+    "accessRequests": {
+      "schema": {
+        "id": "string",
+        "covenantName": "string",
+        "category": "string",
+        "state": "string",
+        "bank": "string",
+        "observations": "string?",
+        "requestedBy": "string",
+        "requestedByUserId": "string?",
+        "requestedAt": "string",
+        "status": "string",
+        "ticketNumber": "string?",
+        "assignedTo": "string?",
+        "assignedAt": "string?",
+        "completedAt": "string?",
+        "adminNotes": "string?",
+        "createdLoginId": "string?"
+      }
     }
   }
 }

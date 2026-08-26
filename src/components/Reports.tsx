@@ -310,7 +310,7 @@ export default function Reports({
 
       {/* Print-Only Title */}
       <div className="hidden print:block border-b pb-4 mb-4">
-        <h1 className="text-2xl font-bold font-display">{db.config.companyName || 'Access Manager'}</h1>
+        <h1 className="text-2xl font-bold font-display">{db.config?.companyName || 'ACESSOS ALCIF'}</h1>
         <p className="text-sm text-slate-500">Relatório Consolidado de Auditoria e Desempenho Operacional - {new Date().toLocaleDateString('pt-BR')}</p>
       </div>
 

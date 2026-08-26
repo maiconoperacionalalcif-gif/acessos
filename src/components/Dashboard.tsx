@@ -117,7 +117,7 @@ export default function Dashboard({
             Olá, {currentUser?.name}! 👋
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            Bem-vindo ao <span className="font-semibold text-blue-600 dark:text-blue-400">Access Manager</span>. Gerencie e monitore as credenciais de crédito consignado em tempo real.
+            Bem-vindo ao <span className="font-semibold text-blue-600 dark:text-blue-400">{db.config?.companyName || 'ACESSOS ALCIF'}</span>. Gerencie e monitore as credenciais de crédito consignado em tempo real.
           </p>
         </div>
         <div className="flex gap-2 shrink-0">
@@ -156,10 +156,10 @@ export default function Dashboard({
             </div>
           </div>
           <button 
-            onClick={() => onNavigateToTab('logins')}
+            onClick={() => onNavigateToTab('accesses')}
             className="flex items-center gap-1 text-[11px] font-bold text-blue-500 dark:text-blue-400 mt-5 hover:underline cursor-pointer group"
           >
-            Ver todos logins <ArrowRight size={10} className="transition-transform group-hover:translate-x-0.5" />
+            Gerenciar acessos <ArrowRight size={10} className="transition-transform group-hover:translate-x-0.5" />
           </button>
         </div>
 
@@ -175,10 +175,10 @@ export default function Dashboard({
             </div>
           </div>
           <button 
-            onClick={() => onNavigateToTab('systems')}
+            onClick={() => onNavigateToTab('accesses')}
             className="flex items-center gap-1 text-[11px] font-bold text-indigo-500 dark:text-indigo-400 mt-5 hover:underline cursor-pointer group"
           >
-            Ver sistemas <ArrowRight size={10} className="transition-transform group-hover:translate-x-0.5" />
+            Ver acessos <ArrowRight size={10} className="transition-transform group-hover:translate-x-0.5" />
           </button>
         </div>
 
@@ -194,10 +194,10 @@ export default function Dashboard({
             </div>
           </div>
           <button 
-            onClick={() => onNavigateToTab('covenants')}
+            onClick={() => onNavigateToTab('accesses')}
             className="flex items-center gap-1 text-[11px] font-bold text-violet-500 dark:text-violet-400 mt-5 hover:underline cursor-pointer group"
           >
-            Ver convênios <ArrowRight size={10} className="transition-transform group-hover:translate-x-0.5" />
+            Ver convênios e acessos <ArrowRight size={10} className="transition-transform group-hover:translate-x-0.5" />
           </button>
         </div>
 

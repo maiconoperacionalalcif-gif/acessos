@@ -66,7 +66,7 @@ export default function Settings({
 
   // Google Apps Script source code template for sheets integration
   const appsScriptCode = `/**
- * Google Apps Script API para ACCESS MANAGER
+ * Google Apps Script API para ACESSOS ALCIF
  * Cole este código em Extensões > Apps Script do seu Google Sheets e publique como Web App.
  */
 

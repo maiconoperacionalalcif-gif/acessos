@@ -1,4 +1,4 @@
-export type UserRole = 'Administrador' | 'Supervisor' | 'Operador';
+export type UserRole = 'Administrador' | 'Supervisor' | 'Operador' | 'Operacional';
 
 export interface User {
   id: string;
@@ -11,7 +11,31 @@ export interface User {
   allowedBanks: string[]; // List of Bank names (empty = all)
 }
 
-export type CovenantCategory = 'Federal' | 'Estadual' | 'Municipal' | 'Militar' | 'INSS' | 'Benefício';
+export type CovenantCategory = 'Prefeituras' | 'Governos' | 'Forças Armadas' | 'Federal' | 'Estadual' | 'Municipal' | 'Militar' | 'INSS' | 'Benefício';
+
+export type AccessRequestCategory = 'Federal' | 'Estadual' | 'Prefeitura';
+export type AccessRequestStatus = 'Pendente' | 'Em Andamento' | 'Concluído' | 'Rejeitado';
+
+export interface AccessRequest {
+  id: string;
+  covenantName: string; // NOME DO CONVÊNIO
+  category: AccessRequestCategory; // FEDERAL, ESTADUAL OU PREFEITURA
+  state: string; // ESTADO (SELECIONÁVEL - UF)
+  bank: string; // BANCO
+  observations?: string; // Observações do analista
+  requestedBy: string; // Nome do analista solicitante
+  requestedByUserId?: string;
+  requestedAt: string; // ISO string
+  
+  // Gestão / Esteira Admin
+  status: AccessRequestStatus;
+  ticketNumber?: string; // NÚMERO DO CHAMADO DA SOLICITAÇÃO
+  assignedTo?: string; // Responsável que pegou a solicitação
+  assignedAt?: string;
+  completedAt?: string;
+  adminNotes?: string; // Resposta / Notas do Administrador para o analista
+  createdLoginId?: string;
+}
 
 export interface Covenant {
   id: string;
@@ -24,6 +48,9 @@ export interface Covenant {
   city?: string;
   organ?: string;
   manager?: string;
+  login?: string;
+  password?: string;
+  bank?: string;
 }
 
 export interface System {
@@ -77,7 +104,7 @@ export interface LoginReservationLog {
 }
 
 export type HistoryActionType = 'Criar' | 'Alterar' | 'Excluir' | 'Visualizar Senha' | 'Copiar Senha' | 'Copiar Usuário' | 'Abrir Sistema';
-export type HistoryTargetType = 'Covenant' | 'System' | 'Login' | 'User';
+export type HistoryTargetType = 'Covenant' | 'System' | 'Login' | 'User' | 'AccessRequest';
 
 export interface HistoryLog {
   id: string;

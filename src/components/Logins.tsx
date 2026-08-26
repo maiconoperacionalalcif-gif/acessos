@@ -27,6 +27,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { Login, Covenant, System, User, LoginStatus } from '../types';
+import { normalizeText, matchesSearch } from '../lib/utils';
 import * as XLSX from 'xlsx';
 
 interface LoginsProps {
@@ -151,16 +152,23 @@ export default function Logins({
 
   // Filter & Search Logic
   const filteredLogins = useMemo(() => {
+    const term = normalizeText(searchTerm);
     return authorizedLogins.filter(login => {
       const cov = covenants.find(c => c.id === login.covenantId);
       const sys = systems.find(s => s.id === login.systemId);
 
-      const matchSearch = 
-        login.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        login.bank.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        login.cpf.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        login.shop.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        login.responsible.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchSearch = !term || (
+        matchesSearch(login.username, term) ||
+        matchesSearch(login.bank, term) ||
+        matchesSearch(login.cpf, term) ||
+        matchesSearch(login.shop, term) ||
+        matchesSearch(login.responsible, term) ||
+        matchesSearch(login.observations, term) ||
+        matchesSearch(cov?.name, term) ||
+        matchesSearch(cov?.state, term) ||
+        matchesSearch(cov?.city, term) ||
+        matchesSearch(sys?.name, term)
+      );
 
       const matchCovenant = selectedCovenant === 'Todos' || login.covenantId === selectedCovenant;
       const matchSystem = selectedSystem === 'Todos' || login.systemId === selectedSystem;

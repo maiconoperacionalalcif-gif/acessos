@@ -23,27 +23,31 @@ import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, on
 // Import all tabs
 import Navigation from './components/Navigation';
 import Dashboard from './components/Dashboard';
+import Accesses from './components/Accesses';
 import Covenants from './components/Covenants';
 import Logins from './components/Logins';
 import Users from './components/Users';
 import History from './components/History';
 import Settings from './components/Settings';
+import OperationalView from './components/OperationalView';
+import AccessRequestsQueue from './components/AccessRequestsQueue';
 import ErrorBoundary from './components/ErrorBoundary';
 
 const MOCK_DATABASE: FullDatabase = {
   config: {
-    companyName: 'Access Manager',
+    companyName: 'ACESSOS ALCIF',
     logoUrl: '',
     primaryColor: '#2563eb',
     sessionTimeoutMinutes: 30,
     rowsPerPage: 10,
-    googleAppsScriptUrl: ''
+    googleAppsScriptUrl: '',
+    googleSheetsSyncUrl: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQcMpLh93RfKdkQ6mGju40CgMTaz7RhBP7S_5LiNWF1BY0ZigqO8dpZpSh1gtx_oAiDtIyXX8Jc-gbC/pubhtml'
   },
   users: [
     {
       id: 'usr-1',
       username: 'admin',
-      name: 'Maicon Operacional (Admin)',
+      name: 'Administrador Geral',
       password: 'admin',
       role: 'Administrador',
       status: 'Ativo',
@@ -52,13 +56,13 @@ const MOCK_DATABASE: FullDatabase = {
     },
     {
       id: 'usr-2',
-      username: 'supervisor',
-      name: 'Amanda Lima (Supervisor)',
-      password: 'supervisor',
-      role: 'Supervisor',
+      username: 'operacional',
+      name: 'Operador de Atendimento',
+      password: 'operacional',
+      role: 'Operacional',
       status: 'Ativo',
-      allowedCovenants: ['cov-1', 'cov-2'],
-      allowedBanks: ['Banco do Brasil', 'Itaú']
+      allowedCovenants: [],
+      allowedBanks: []
     },
     {
       id: 'usr-3',
@@ -67,60 +71,254 @@ const MOCK_DATABASE: FullDatabase = {
       password: 'operador',
       role: 'Operador',
       status: 'Ativo',
-      allowedCovenants: ['cov-1'],
-      allowedBanks: ['Banco do Brasil']
+      allowedCovenants: [],
+      allowedBanks: []
+    },
+    {
+      id: 'usr-4',
+      username: 'supervisor',
+      name: 'Amanda Lima (Supervisor)',
+      password: 'supervisor',
+      role: 'Supervisor',
+      status: 'Ativo',
+      allowedCovenants: [],
+      allowedBanks: []
     }
   ],
   covenants: [
+    // Prefeituras
     {
-      id: "cov-1",
-      name: "SIAPE / SouGov",
-      category: "Federal",
+      id: "cov-pmsp",
+      name: "Prefeitura de São Paulo - PMSP",
+      category: "Prefeituras",
+      state: "SP",
+      city: "São Paulo",
+      organ: "Secretaria Municipal de Gestão",
+      manager: "Consiglog",
+      managerUrl: "https://pmsp.consiglog.com.br",
+      login: "pmsp.bb01",
+      password: "PmspPass@2026",
+      bank: "Banco do Brasil",
+      observations: "Consignado servidores municipais de SP ativos e aposentados.",
+      status: "Ativo"
+    },
+    {
+      id: "cov-pmrj",
+      name: "Prefeitura do Rio de Janeiro - PCRJ",
+      category: "Prefeituras",
+      state: "RJ",
+      city: "Rio de Janeiro",
+      organ: "Secretaria Municipal de Fazenda",
+      manager: "Ergon Carioca",
+      managerUrl: "https://ergon.rio.rj.gov.br",
+      login: "pcrj.sant01",
+      password: "RioPass#2026",
+      bank: "Santander",
+      observations: "Acessos via chave de segurança e certificação.",
+      status: "Ativo"
+    },
+    {
+      id: "cov-pmbh",
+      name: "Prefeitura de Belo Horizonte - PBH",
+      category: "Prefeituras",
+      state: "MG",
+      city: "Belo Horizonte",
+      organ: "Secretaria de Planejamento e Gestão",
+      manager: "PBH Servidor",
+      managerUrl: "https://servicos.pbh.gov.br",
+      login: "pbh.bb.op",
+      password: "BHPw#2026",
+      bank: "Banco do Brasil",
+      observations: "Liberação de margem consignada PBH.",
+      status: "Ativo"
+    },
+    {
+      id: "cov-pmctba",
+      name: "Prefeitura de Curitiba",
+      category: "Prefeituras",
+      state: "PR",
+      city: "Curitiba",
+      organ: "Secretaria de Administração e RH",
+      manager: "RH 24 Horas",
+      managerUrl: "https://rh24horas.curitiba.pr.gov.br",
+      login: "curitiba.caixa",
+      password: "CtbaPass#2026",
+      bank: "Caixa Econômica",
+      observations: "Consulta de margem consignável dos servidores municipais de Curitiba.",
+      status: "Ativo"
+    },
+    {
+      id: "cov-pmsa",
+      name: "Prefeitura de Salvador",
+      category: "Prefeituras",
+      state: "BA",
+      city: "Salvador",
+      organ: "Secretaria Municipal de Gestão",
+      manager: "Portal Servidor Salvador",
+      managerUrl: "https://portaldoservidor.salvador.ba.gov.br",
+      login: "salvador.bb",
+      password: "SsaPass#2026",
+      bank: "Banco do Brasil",
+      observations: "Margem e extrato de servidores de Salvador.",
+      status: "Ativo"
+    },
+    {
+      id: "cov-pmpa",
+      name: "Prefeitura de Porto Alegre",
+      category: "Prefeituras",
+      state: "RS",
+      city: "Porto Alegre",
+      organ: "Secretaria de Planejamento",
+      manager: "RH Porto Alegre",
+      managerUrl: "https://rh.portoalegre.rs.gov.br",
+      login: "poa.banrisul",
+      password: "PoaBanrisul@26",
+      bank: "Banrisul",
+      observations: "Consignado PMPA com autenticação do Banrisul.",
+      status: "Ativo"
+    },
+    {
+      id: "cov-pmgyn",
+      name: "Prefeitura de Goiânia",
+      category: "Prefeituras",
+      state: "GO",
+      city: "Goiânia",
+      organ: "Secretaria Municipal de Administração",
+      manager: "ConsigX",
+      managerUrl: "https://goiania.consigx.com.br",
+      login: "gyn.itau.op",
+      password: "GynPass@2026",
+      bank: "Itaú",
+      observations: "Gestora ConsigX Goiânia.",
+      status: "Ativo"
+    },
+    // Governos
+    {
+      id: "cov-govsp",
+      name: "Governo do Estado de São Paulo",
+      category: "Governos",
+      state: "SP",
+      city: "São Paulo",
+      organ: "Secretaria de Gestão e Governo Digital",
+      manager: "Portal do Servidor SP / Prodesp",
+      managerUrl: "https://portaldoservidor.sp.gov.br",
+      login: "sp.gov.bb01",
+      password: "SpGovPass@2026",
+      bank: "Banco do Brasil",
+      observations: "Consignado estadual SP - servidores ativos e inativos.",
+      status: "Ativo"
+    },
+    {
+      id: "cov-govrj",
+      name: "Governo do Estado do Rio de Janeiro",
+      category: "Governos",
+      state: "RJ",
+      city: "Rio de Janeiro",
+      organ: "Secretaria de Estado de Fazenda",
+      manager: "Proderj / Portal RJ",
+      managerUrl: "https://proderj.rj.gov.br",
+      login: "govrj.brad01",
+      password: "RjGovPass#2026",
+      bank: "Bradesco",
+      observations: "Servidores públicos do estado do Rio de Janeiro.",
+      status: "Ativo"
+    },
+    {
+      id: "cov-govmg",
+      name: "Governo do Estado de Minas Gerais",
+      category: "Governos",
+      state: "MG",
+      city: "Belo Horizonte",
+      organ: "Secretaria de Estado de Planejamento e Gestão (SEPLAG)",
+      manager: "Portal do Servidor MG",
+      managerUrl: "https://portaldoservidor.mg.gov.br",
+      login: "mg.gov.itau",
+      password: "MgGovPass@2026",
+      bank: "Itaú",
+      observations: "Consignado servidores de Minas Gerais.",
+      status: "Ativo"
+    },
+    {
+      id: "cov-govdf",
+      name: "Governo do Distrito Federal - GDF",
+      category: "Governos",
       state: "DF",
       city: "Brasília",
-      organ: "Ministério da Economia",
-      manager: "Governo Federal",
-      observations: "Acesso unificado via SouGov. Gov.br bronze/prata/ouro.",
+      organ: "Secretaria de Economia do DF",
+      manager: "SIGRH DF",
+      managerUrl: "https://sigrh.df.gov.br",
+      login: "gdf.brb.op",
+      password: "GdfBrbPass#2026",
+      bank: "BRB - Banco de Brasília",
+      observations: "Servidores civis e professores do GDF.",
+      status: "Ativo"
+    },
+    // Forças Armadas
+    {
+      id: "cov-eb",
+      name: "Exército Brasileiro - CPEx",
+      category: "Forças Armadas",
+      state: "DF",
+      city: "Brasília",
+      organ: "Centro de Pagamento do Exército (CPEx)",
+      manager: "CPEx / EB",
+      managerUrl: "https://cpex.eb.mil.br",
+      login: "eb.cpex.bb",
+      password: "CpexBbPass#2026",
+      bank: "Banco do Brasil",
+      observations: "Militares do Exército Brasileiro, oficiais e praças.",
       status: "Ativo"
     },
     {
-      id: "cov-2",
-      name: "INSS - Dataprev",
-      category: "INSS",
-      state: "Nacional",
+      id: "cov-fab",
+      name: "Força Aérea Brasileira - DIRAP / FAB",
+      category: "Forças Armadas",
+      state: "RJ",
       city: "Rio de Janeiro",
-      organ: "INSS",
-      manager: "Dataprev",
-      observations: "Consultas de extrato de empréstimo e margem.",
+      organ: "Diretoria de Administração do Pessoal (DIRAP)",
+      manager: "DIRAP FAB",
+      managerUrl: "https://dirap.fab.mil.br",
+      login: "fab.dirap.sant",
+      password: "FabSantPass@2026",
+      bank: "Santander",
+      observations: "Militares da Aeronáutica / Força Aérea Brasileira.",
       status: "Ativo"
     },
     {
-      id: "cov-3",
-      name: "Governo de SP - Portal do Estado",
-      category: "Estadual",
-      state: "SP",
-      city: "São Paulo",
-      organ: "Secretaria de Gestão Pública",
-      manager: "Prodesp",
-      observations: "Consignado estadual SP - servidores ativos e aposentados.",
+      id: "cov-mb",
+      name: "Marinha do Brasil - PAPEM",
+      category: "Forças Armadas",
+      state: "RJ",
+      city: "Rio de Janeiro",
+      organ: "Pagadoria de Pessoal da Marinha (PAPEM)",
+      manager: "PAPEM Marinha",
+      managerUrl: "https://papem.mar.mil.br",
+      login: "mb.papem.bb",
+      password: "MbBbPass#2026",
+      bank: "Banco do Brasil",
+      observations: "Militares da Marinha do Brasil e Corpo de Fuzileiros Navais.",
       status: "Ativo"
     },
     {
-      id: "cov-4",
-      name: "Prefeitura de SP - Consiglog",
-      category: "Municipal",
-      state: "SP",
-      city: "São Paulo",
-      organ: "Prefeitura de SP",
-      manager: "Consiglog",
-      observations: "Portal de consignação dos servidores municipais de SP.",
+      id: "cov-sougov",
+      name: "SIAPE / SouGov (Servidores Federais)",
+      category: "Forças Armadas",
+      state: "DF",
+      city: "Brasília",
+      organ: "Ministério da Gestão e da Inovação",
+      manager: "SouGov.br",
+      managerUrl: "https://www.gov.br/sougov",
+      login: "siape.bb.operador",
+      password: "BB@Siape#2026",
+      bank: "Banco do Brasil",
+      observations: "Acesso unificado servidores públicos federais e pensionistas.",
       status: "Ativo"
     }
   ],
   systems: [
     {
       id: "sys-1",
-      covenantId: "cov-1",
+      covenantId: "cov-sougov",
       name: "SouGov",
       description: "Sistema de Gestão de Pessoas do Governo Federal",
       url: "https://www.gov.br/sougov",
@@ -130,7 +328,7 @@ const MOCK_DATABASE: FullDatabase = {
     },
     {
       id: "sys-2",
-      covenantId: "cov-2",
+      covenantId: "",
       name: "Dataprev - Meu INSS",
       description: "Extrato e consulta de benefícios previdenciários",
       url: "https://meu.inss.gov.br",
@@ -140,7 +338,7 @@ const MOCK_DATABASE: FullDatabase = {
     },
     {
       id: "sys-3",
-      covenantId: "cov-3",
+      covenantId: "cov-govsp",
       name: "Portal do Servidor SP",
       description: "Consulta de holerite e consignações SP",
       url: "https://www.portaldoservidor.sp.gov.br",
@@ -150,7 +348,7 @@ const MOCK_DATABASE: FullDatabase = {
     },
     {
       id: "sys-4",
-      covenantId: "cov-4",
+      covenantId: "cov-pmsp",
       name: "Consiglog Prefeitura SP",
       description: "Gerenciamento de margem consignável da PMSP",
       url: "https://pmsp.consiglog.com.br",
@@ -170,63 +368,278 @@ const MOCK_DATABASE: FullDatabase = {
     }
   ],
   logins: [
+    // PMSP
     {
-      id: "log-1",
-      covenantId: "cov-1",
-      systemId: "sys-1",
+      id: "log-pmsp-bb",
+      covenantId: "cov-pmsp",
+      systemId: "sys-4",
       bank: "Banco do Brasil",
-      shop: "Filial SP Centro",
-      username: "bb.consignado01",
-      password: "BB@Consig#2026",
+      shop: "São Paulo Centro",
+      username: "pmsp.bb.operador",
+      password: "BB@Pmsp#2026",
       cpf: "123.456.789-00",
       pin: "4321",
-      token: "BB-9876",
-      email: "consignado01@bbfinanceiro.com.br",
+      token: "BB-9988",
+      email: "operador.sp@bb.com.br",
       phone: "(11) 98765-4321",
       responsible: "Carlos Alberto",
-      observations: "Utilizar apenas para propostas acima de R$ 50k.",
+      observations: "Acesso liberado pelo Banco do Brasil.",
       creationDate: "2026-01-10T10:00:00.000Z",
       lastAlteration: "2026-07-15T14:30:00.000Z",
       expirationDate: "2026-12-31T23:59:59.000Z",
       status: "Ativo"
     },
     {
-      id: "log-2",
-      covenantId: "cov-2",
-      systemId: "sys-2",
-      bank: "Itaú Consignado",
-      shop: "Matriz Campinas",
-      username: "itau.prev02",
-      password: "ItauPass#8822",
-      cpf: "987.654.321-11",
+      id: "log-pmsp-itau",
+      covenantId: "cov-pmsp",
+      systemId: "sys-4",
+      bank: "Itaú",
+      shop: "São Paulo Centro",
+      username: "pmsp.itau.operador",
+      password: "Itau@Pmsp#2026",
+      cpf: "123.456.789-00",
       pin: "1234",
-      token: "IT-5544",
-      email: "operacao.campinas@itauconsignado.com.br",
-      phone: "(19) 97123-8899",
+      token: "IT-8877",
+      email: "operador.sp@itau.com.br",
+      phone: "(11) 98765-4321",
+      responsible: "Carlos Alberto",
+      observations: "Acesso liberado pelo Itaú Consignado.",
+      creationDate: "2026-01-10T10:00:00.000Z",
+      lastAlteration: "2026-07-15T14:30:00.000Z",
+      expirationDate: "2026-12-31T23:59:59.000Z",
+      status: "Ativo"
+    },
+    {
+      id: "log-pmsp-brad",
+      covenantId: "cov-pmsp",
+      systemId: "sys-4",
+      bank: "Bradesco",
+      shop: "São Paulo Centro",
+      username: "pmsp.brad.operador",
+      password: "Brad@Pmsp#2026",
+      cpf: "123.456.789-00",
+      pin: "5566",
+      token: "BR-5544",
+      email: "operador.sp@bradesco.com.br",
+      phone: "(11) 98765-4321",
+      responsible: "Carlos Alberto",
+      observations: "Acesso liberado pelo Bradesco Promotora.",
+      creationDate: "2026-01-10T10:00:00.000Z",
+      lastAlteration: "2026-07-15T14:30:00.000Z",
+      expirationDate: "2026-12-31T23:59:59.000Z",
+      status: "Ativo"
+    },
+    {
+      id: "log-pmsp-sant",
+      covenantId: "cov-pmsp",
+      systemId: "sys-4",
+      bank: "Santander",
+      shop: "São Paulo Centro",
+      username: "pmsp.sant.operador",
+      password: "Sant@Pmsp#2026",
+      cpf: "123.456.789-00",
+      pin: "7788",
+      token: "ST-2233",
+      email: "operador.sp@santander.com.br",
+      phone: "(11) 98765-4321",
+      responsible: "Carlos Alberto",
+      observations: "Acesso liberado pelo Santander Olé.",
+      creationDate: "2026-01-10T10:00:00.000Z",
+      lastAlteration: "2026-07-15T14:30:00.000Z",
+      expirationDate: "2026-12-31T23:59:59.000Z",
+      status: "Ativo"
+    },
+    // PMRJ
+    {
+      id: "log-pmrj-sant",
+      covenantId: "cov-pmrj",
+      systemId: "sys-5",
+      bank: "Santander",
+      shop: "Rio de Janeiro",
+      username: "pmrj.sant.op",
+      password: "RioSant@2026",
+      cpf: "234.567.890-11",
+      pin: "2233",
+      token: "ST-4455",
+      email: "rio@santander.com.br",
+      phone: "(21) 99887-1122",
       responsible: "Mariana Souza",
-      observations: "Acesso direto Dataprev. Troca de senha a cada 60 dias.",
-      creationDate: "2026-02-01T11:20:00.000Z",
-      lastAlteration: "2026-06-20T09:15:00.000Z",
-      expirationDate: "2026-11-30T23:59:59.000Z",
+      observations: "Acesso liberado pelo Santander.",
+      creationDate: "2026-02-01T10:00:00.000Z",
+      lastAlteration: "2026-07-15T14:30:00.000Z",
+      expirationDate: "2026-12-31T23:59:59.000Z",
+      status: "Ativo"
+    },
+    // GOV SP
+    {
+      id: "log-govsp-bb",
+      covenantId: "cov-govsp",
+      systemId: "sys-3",
+      bank: "Banco do Brasil",
+      shop: "São Paulo",
+      username: "govsp.bb.op",
+      password: "BbGovSp@2026",
+      cpf: "456.789.012-33",
+      pin: "4455",
+      token: "BB-6655",
+      email: "govsp@bb.com.br",
+      phone: "(11) 97788-9900",
+      responsible: "Juliana Rocha",
+      observations: "Acesso liberado pelo Banco do Brasil.",
+      creationDate: "2026-01-05T10:00:00.000Z",
+      lastAlteration: "2026-07-15T14:30:00.000Z",
+      expirationDate: "2026-12-31T23:59:59.000Z",
+      status: "Ativo"
+    },
+    {
+      id: "log-govsp-brad",
+      covenantId: "cov-govsp",
+      systemId: "sys-3",
+      bank: "Bradesco",
+      shop: "São Paulo",
+      username: "govsp.brad.op",
+      password: "BradGovSp@2026",
+      cpf: "456.789.012-33",
+      pin: "8899",
+      token: "BR-1188",
+      email: "govsp@bradesco.com.br",
+      phone: "(11) 97788-9900",
+      responsible: "Juliana Rocha",
+      observations: "Acesso liberado pelo Bradesco.",
+      creationDate: "2026-01-05T10:00:00.000Z",
+      lastAlteration: "2026-07-15T14:30:00.000Z",
+      expirationDate: "2026-12-31T23:59:59.000Z",
+      status: "Ativo"
+    },
+    {
+      id: "log-govsp-itau",
+      covenantId: "cov-govsp",
+      systemId: "sys-3",
+      bank: "Itaú",
+      shop: "São Paulo",
+      username: "govsp.itau.op",
+      password: "ItauGovSp@2026",
+      cpf: "456.789.012-33",
+      pin: "1100",
+      token: "IT-9922",
+      email: "govsp@itau.com.br",
+      phone: "(11) 97788-9900",
+      responsible: "Juliana Rocha",
+      observations: "Acesso liberado pelo Itaú.",
+      creationDate: "2026-01-05T10:00:00.000Z",
+      lastAlteration: "2026-07-15T14:30:00.000Z",
+      expirationDate: "2026-12-31T23:59:59.000Z",
+      status: "Ativo"
+    },
+    // EXÉRCITO BRASILEIRO
+    {
+      id: "log-eb-bb",
+      covenantId: "cov-eb",
+      systemId: "sys-1",
+      bank: "Banco do Brasil",
+      shop: "Brasília",
+      username: "eb.cpex.bb.op",
+      password: "BbCpexPass@2026",
+      cpf: "890.123.456-77",
+      pin: "1122",
+      token: "BB-8899",
+      email: "cpex@bb.com.br",
+      phone: "(61) 99887-5566",
+      responsible: "Tenente Silva",
+      observations: "Acesso liberado pelo Banco do Brasil para o CPEx.",
+      creationDate: "2026-01-10T10:00:00.000Z",
+      lastAlteration: "2026-07-15T14:30:00.000Z",
+      expirationDate: "2026-12-31T23:59:59.000Z",
+      status: "Ativo"
+    },
+    {
+      id: "log-eb-itau",
+      covenantId: "cov-eb",
+      systemId: "sys-1",
+      bank: "Itaú",
+      shop: "Brasília",
+      username: "eb.cpex.itau.op",
+      password: "ItauCpexPass@2026",
+      cpf: "890.123.456-77",
+      pin: "3344",
+      token: "IT-2211",
+      email: "cpex@itau.com.br",
+      phone: "(61) 99887-5566",
+      responsible: "Tenente Silva",
+      observations: "Acesso liberado pelo Itaú para militares do Exército.",
+      creationDate: "2026-01-10T10:00:00.000Z",
+      lastAlteration: "2026-07-15T14:30:00.000Z",
+      expirationDate: "2026-12-31T23:59:59.000Z",
+      status: "Ativo"
+    },
+    {
+      id: "log-eb-brad",
+      covenantId: "cov-eb",
+      systemId: "sys-1",
+      bank: "Bradesco",
+      shop: "Brasília",
+      username: "eb.cpex.brad.op",
+      password: "BradCpexPass@2026",
+      cpf: "890.123.456-77",
+      pin: "5566",
+      token: "BR-3344",
+      email: "cpex@bradesco.com.br",
+      phone: "(61) 99887-5566",
+      responsible: "Tenente Silva",
+      observations: "Acesso liberado pelo Bradesco para militares do Exército.",
+      creationDate: "2026-01-10T10:00:00.000Z",
+      lastAlteration: "2026-07-15T14:30:00.000Z",
+      expirationDate: "2026-12-31T23:59:59.000Z",
       status: "Ativo"
     }
   ],
   favorites: [
     { systemId: "sys-1", userId: "usr-1" },
-    { systemId: "sys-2", userId: "usr-1" }
+    { systemId: "sys-3", userId: "usr-1" }
   ],
   reservationLogs: [],
   historyLogs: [
     {
       id: "hist-1",
       userId: "usr-1",
-      userName: "Maicon Operacional (Admin)",
+      userName: "Administrador Geral",
       actionType: "Criar",
-      targetType: "Login",
-      targetId: "log-1",
-      targetName: "bb.consignado01",
+      targetType: "Covenant",
+      targetId: "cov-pmsp",
+      targetName: "Prefeitura de São Paulo - PMSP",
       timestamp: "2026-07-15T14:30:00.000Z",
       ip: "192.168.1.50"
+    }
+  ],
+  accessRequests: [
+    {
+      id: "req-1",
+      covenantName: "Prefeitura de Campinas",
+      category: "Prefeitura",
+      state: "SP",
+      bank: "Itaú Consignado",
+      observations: "Precisamos de acesso para novos analistas consultarem a margem dos servidores da educação.",
+      requestedBy: "Bruno Silva (Operador)",
+      requestedByUserId: "usr-3",
+      requestedAt: "2026-08-25T14:30:00.000Z",
+      status: "Em Andamento",
+      ticketNumber: "CH-2026-0891",
+      assignedTo: "Administrador Geral",
+      assignedAt: "2026-08-25T15:10:00.000Z",
+      adminNotes: "Chamado aberto junto ao canal de suporte do Itaú. Prazo informado: 24h."
+    },
+    {
+      id: "req-2",
+      covenantName: "Governo do Estado de Minas Gerais",
+      category: "Estadual",
+      state: "MG",
+      bank: "Banco do Brasil",
+      observations: "Solicitação de novo usuário para esteira de crédito do estado de MG.",
+      requestedBy: "Amanda Lima (Supervisor)",
+      requestedByUserId: "usr-4",
+      requestedAt: "2026-08-26T09:15:00.000Z",
+      status: "Pendente",
+      adminNotes: ""
     }
   ]
 };
@@ -259,12 +672,21 @@ export default function App() {
       setLoading(true);
       setDbError(null);
       const data = await api.getDatabase();
+      const currentConfig = data?.config || MOCK_DATABASE.config;
+      const normalizedCompanyName = (!currentConfig.companyName || currentConfig.companyName.toLowerCase().includes('access manager') || currentConfig.companyName.toLowerCase().includes('acess manager'))
+        ? 'ACESSOS ALCIF'
+        : currentConfig.companyName;
+
       const sanitizedData: FullDatabase = {
-        config: data?.config || MOCK_DATABASE.config,
+        config: {
+          ...currentConfig,
+          companyName: normalizedCompanyName
+        },
         users: Array.isArray(data?.users) && data.users.length > 0 ? data.users : MOCK_DATABASE.users,
         covenants: Array.isArray(data?.covenants) ? data.covenants : MOCK_DATABASE.covenants,
         systems: Array.isArray(data?.systems) ? data.systems : MOCK_DATABASE.systems,
         logins: Array.isArray(data?.logins) ? data.logins : MOCK_DATABASE.logins,
+        accessRequests: Array.isArray(data?.accessRequests) ? data.accessRequests : MOCK_DATABASE.accessRequests || [],
         favorites: Array.isArray(data?.favorites) ? data.favorites : [],
         reservationLogs: Array.isArray(data?.reservationLogs) ? data.reservationLogs : [],
         historyLogs: Array.isArray(data?.historyLogs) ? data.historyLogs : []
@@ -310,7 +732,7 @@ export default function App() {
 
   // Dynamic colors / settings mapping from configuration
   const config = db?.config || {
-    companyName: 'Access Manager',
+    companyName: 'ACESSOS ALCIF',
     logoUrl: '',
     primaryColor: '#2563eb',
     sessionTimeoutMinutes: 30,
@@ -359,7 +781,7 @@ export default function App() {
     const dbUser = databaseUsers.find(u => u.username.toLowerCase() === username);
 
     if (!dbUser) {
-      setLoginError('Usuário não cadastrado na gestora de margem.');
+      setLoginError('Usuário não cadastrado no sistema.');
       setLoading(false);
       return;
     }
@@ -400,19 +822,24 @@ export default function App() {
     }
 
     setCurrentUser(dbUser);
+    setCurrentTab('operational');
     setLoginError('');
     setUsernameInput('');
     setPasswordInput('');
     setLoading(false);
   };
 
-  // Demo user login shortcut helper using Firebase Auth
-  const handleQuickLogin = async (role: 'Administrador' | 'Supervisor' | 'Operador') => {
+  // Demo user login shortcut helper
+  const handleQuickLogin = async (role: 'Administrador' | 'Operacional' | 'Operador' | 'Supervisor') => {
     setLoading(true);
     setLoginError('');
     
     const databaseUsers = db?.users || MOCK_DATABASE.users;
-    const dbUser = databaseUsers.find(u => u.role === role);
+    let dbUser = databaseUsers.find(u => u.role === role);
+
+    if (!dbUser && role === 'Operacional') {
+      dbUser = databaseUsers.find(u => u.role === 'Operador') || databaseUsers[1];
+    }
 
     if (!dbUser) {
       setLoginError(`Nenhum usuário com o cargo de ${role} encontrado.`);
@@ -445,6 +872,7 @@ export default function App() {
     }
 
     setCurrentUser(dbUser);
+    setCurrentTab('operational');
     setLoginError('');
     setLoading(false);
   };
@@ -456,7 +884,7 @@ export default function App() {
       console.error('Erro ao realizar logout:', err);
     }
     setCurrentUser(null);
-    setCurrentTab('dashboard');
+    setCurrentTab('operational');
   };
 
   // Tab navigation & filtered drilldown routing
@@ -470,20 +898,53 @@ export default function App() {
   };
 
   // CRUD Save helper across modules
-  const handleSaveItem = async (table: 'covenants' | 'systems' | 'logins' | 'users', item: any) => {
+  const handleSaveItem = async (table: 'covenants' | 'systems' | 'logins' | 'users' | 'accessRequests', item: any) => {
     try {
       const isNew = !db?.[table]?.some((x: any) => x.id === item.id);
       const actionType = isNew ? 'Criar' : 'Alterar';
       const targetType = table === 'covenants' ? 'Covenant' : 
                          table === 'systems' ? 'System' : 
-                         table === 'logins' ? 'Login' : 'User';
+                         table === 'logins' ? 'Login' : 
+                         table === 'users' ? 'User' : 'AccessRequest';
 
-      const updatedDb = await api.saveItem(table, item);
+      let updatedDb = await api.saveItem(table, item);
       setDb(updatedDb);
+
+      // If a covenant was saved with login, password or bank, ensure a matching login is present
+      if (table === 'covenants' && (item.login || item.password || item.bank)) {
+        const existingLogin = updatedDb.logins?.find((l: any) => l.covenantId === item.id);
+        const systemId = updatedDb.systems?.find((s: any) => s.covenantId === item.id)?.id || updatedDb.systems?.[0]?.id || 'sys-1';
+        const nowIso = new Date().toISOString();
+        const loginPayload = {
+          id: existingLogin ? existingLogin.id : `log-${Date.now()}`,
+          covenantId: item.id,
+          systemId: systemId,
+          url: item.managerUrl || '',
+          bank: item.bank || 'Outros',
+          shop: 'Cadastrado no Convênio',
+          username: item.login || 'usuario.convenio',
+          password: item.password || '',
+          cpf: existingLogin?.cpf || '',
+          pin: existingLogin?.pin || '',
+          token: existingLogin?.token || '',
+          email: existingLogin?.email || '',
+          phone: existingLogin?.phone || '',
+          responsible: currentUser?.name || 'Cadastro de Convênio',
+          observations: item.observations || 'Sincronizado do Cadastro de Convênio',
+          creationDate: existingLogin ? existingLogin.creationDate : nowIso,
+          lastAlteration: nowIso,
+          expirationDate: '',
+          status: item.status || 'Ativo',
+          reservedBy: existingLogin?.reservedBy || '',
+          reservedAt: existingLogin?.reservedAt || ''
+        };
+        updatedDb = await api.saveItem('logins', loginPayload);
+        setDb(updatedDb);
+      }
 
       // Create history log entry
       if (currentUser) {
-        const targetName = (item as any).name || (item as any).username || item.id;
+        const targetName = (item as any).name || (item as any).username || (item as any).covenantName || item.id;
         const log: HistoryLog = {
           id: `hist-${Date.now()}`,
           userId: currentUser.id,
@@ -504,13 +965,14 @@ export default function App() {
   };
 
   // CRUD Delete helper across modules
-  const handleDeleteItem = async (table: 'covenants' | 'systems' | 'logins' | 'users', id: string) => {
+  const handleDeleteItem = async (table: 'covenants' | 'systems' | 'logins' | 'users' | 'accessRequests', id: string) => {
     try {
       const currentItem = db?.[table]?.find((x: any) => x.id === id);
-      const targetName = currentItem ? ((currentItem as any).name || (currentItem as any).username) : id;
+      const targetName = currentItem ? ((currentItem as any).name || (currentItem as any).username || (currentItem as any).covenantName) : id;
       const targetType = table === 'covenants' ? 'Covenant' : 
                          table === 'systems' ? 'System' : 
-                         table === 'logins' ? 'Login' : 'User';
+                         table === 'logins' ? 'Login' : 
+                         table === 'users' ? 'User' : 'AccessRequest';
 
       const updatedDb = await api.deleteItem(table, id);
       setDb(updatedDb);
@@ -682,7 +1144,7 @@ export default function App() {
               </div>
             )}
             <h1 className="text-xl md:text-2xl font-display font-extrabold tracking-tight text-slate-900 dark:text-white uppercase">
-              {config.companyName || 'Access Manager'}
+              {config.companyName || 'ACESSOS ALCIF'}
             </h1>
             <p className="text-xs text-slate-400 dark:text-slate-500 font-medium">Controle de acessos, senhas e auditagem de correspondentes.</p>
           </div>
@@ -722,6 +1184,38 @@ export default function App() {
             </div>
           )}
 
+          {/* Demo One-Click Access Badges */}
+          <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2.5 text-center">Selecione o tipo de acesso:</p>
+            <div className="grid grid-cols-2 gap-2.5">
+              <button
+                type="button"
+                onClick={() => handleQuickLogin('Administrador')}
+                className="p-3 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/60 rounded-xl text-left hover:border-blue-400 hover:shadow-md transition-all cursor-pointer group"
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-black text-blue-700 dark:text-blue-300">ADMIN</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-200 dark:bg-blue-900 text-blue-800 dark:text-blue-200 font-bold">Total</span>
+                </div>
+                <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-tight">Cadastros, ajustes, exclusões e controle total.</p>
+                <span className="text-[9px] font-mono text-blue-600 dark:text-blue-400 mt-1 block">admin / admin</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleQuickLogin('Operacional')}
+                className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 rounded-xl text-left hover:border-emerald-400 hover:shadow-md transition-all cursor-pointer group"
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-black text-emerald-700 dark:text-emerald-300">OPERACIONAL</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-200 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200 font-bold">Acesso</span>
+                </div>
+                <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-tight">Busca simples, estados e lista de logins por banco.</p>
+                <span className="text-[9px] font-mono text-emerald-600 dark:text-emerald-400 mt-1 block">operacional / operacional</span>
+              </button>
+            </div>
+          </div>
+
           {/* Login Form */}
           <form onSubmit={handleLoginSubmit} className="space-y-4">
             <div>
@@ -729,7 +1223,7 @@ export default function App() {
               <input
                 type="text"
                 required
-                placeholder="Ex: maicon.admin"
+                placeholder="Ex: admin ou operacional"
                 value={usernameInput}
                 onChange={(e) => setUsernameInput(e.target.value)}
                 className="w-full px-4 py-2.5 border rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none bg-slate-50/50 dark:bg-slate-800/50 dark:border-slate-700 text-slate-900 dark:text-white"
@@ -737,11 +1231,11 @@ export default function App() {
             </div>
 
             <div>
-              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Senha Corporativa</label>
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Senha de Acesso</label>
               <input
                 type="password"
                 required
-                placeholder="Insira sua senha de acesso"
+                placeholder="Insira sua senha"
                 value={passwordInput}
                 onChange={(e) => setPasswordInput(e.target.value)}
                 className="w-full px-4 py-2.5 border rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none bg-slate-50/50 dark:bg-slate-800/50 dark:border-slate-700 text-slate-900 dark:text-white"
@@ -752,7 +1246,7 @@ export default function App() {
               type="submit"
               className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30 transition-all cursor-pointer"
             >
-              Acessar Painel Seguro
+              Acessar Painel
             </button>
           </form>
         </div>
@@ -760,37 +1254,43 @@ export default function App() {
     );
   }
 
+  const isOperatorOnly = currentUser?.role === 'Operador' || currentUser?.role === 'Operacional';
+  const pendingRequestsCount = (db?.accessRequests || []).filter(r => r.status === 'Pendente' || r.status === 'Em Andamento').length;
+
   // RENDER: FULL SECURE MAIN WORKSPACE
   return (
     <div className="min-h-screen flex bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 transition-colors duration-200">
       
-      {/* Dynamic Left Sidebar Navigation */}
-      <Navigation
-        currentTab={currentTab}
-        setCurrentTab={handleNavigateToTab}
-        currentUser={currentUser}
-        onLogout={handleLogout}
-        config={config}
-        darkMode={darkMode}
-        setDarkMode={setDarkMode}
-      />
+      {/* Left Sidebar Navigation (Only show if not strictly Operator or if Operator wants tabs) */}
+      {!isOperatorOnly && (
+        <Navigation
+          currentTab={currentTab}
+          setCurrentTab={handleNavigateToTab}
+          currentUser={currentUser}
+          onLogout={handleLogout}
+          config={config}
+          darkMode={darkMode}
+          setDarkMode={setDarkMode}
+          pendingRequestsCount={pendingRequestsCount}
+        />
+      )}
 
       {/* Main Workspace Frame */}
       <div className="flex-1 flex flex-col overflow-hidden">
         
         {/* Unified Top Header Bar */}
-        <header className="h-16 border-b border-slate-200 dark:border-slate-900 bg-white/70 dark:bg-slate-950/70 backdrop-blur-md flex items-center justify-between px-6 z-10 sticky top-0 print:hidden">
+        <header className="h-16 border-b border-slate-200 dark:border-slate-900 bg-white/70 dark:bg-slate-950/70 backdrop-blur-md flex items-center justify-between px-4 md:px-6 z-10 sticky top-0 print:hidden">
           
           <div className="flex items-center gap-3">
             <span className="font-display font-extrabold text-sm tracking-wider text-slate-950 dark:text-white uppercase flex items-center gap-2">
               {config.logoUrl ? (
                 <img src={config.logoUrl} alt="Logo" className="h-5 object-contain" referrerPolicy="no-referrer" />
               ) : (
-                <div className="w-6 h-6 rounded bg-blue-600 flex items-center justify-center text-white font-black text-xs shadow-md">
+                <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center text-white font-black text-xs shadow-md">
                   A
                 </div>
               )}
-              <span>{config.companyName || 'Access Manager'}</span>
+              <span>{config.companyName || 'ACESSOS ALCIF'}</span>
             </span>
 
             {/* Quick Spreadsheet sync button in header */}
@@ -801,8 +1301,22 @@ export default function App() {
               title="Clique para sincronizar com sua Planilha Google Sheets"
             >
               <RefreshCw size={12} className={isSyncingSheets ? "animate-spin text-emerald-600" : "text-emerald-600"} />
-              <span>{isSyncingSheets ? "Sincronizando..." : "Sincronizar Google Sheets"}</span>
+              <span>{isSyncingSheets ? "Sincronizando..." : "Sincronizar Planilha"}</span>
             </button>
+
+            {/* Admin quick toggle to Operational view */}
+            {currentUser?.role === 'Administrador' && (
+              <button
+                onClick={() => setCurrentTab(currentTab === 'operational' ? 'covenants' : 'operational')}
+                className={`hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border ${
+                  currentTab === 'operational'
+                    ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700'
+                }`}
+              >
+                <span>{currentTab === 'operational' ? 'Modo: Operacional Ativo' : 'Alternar p/ Modo Operacional'}</span>
+              </button>
+            )}
           </div>
 
           <div className="flex items-center gap-4">
@@ -818,12 +1332,18 @@ export default function App() {
 
             {/* User Profile Badge & Role */}
             <div className="flex items-center gap-2 border-l pl-4 dark:border-slate-800">
-              <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-600 flex items-center justify-center font-bold text-xs">
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${
+                currentUser.role === 'Administrador' 
+                  ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-600'
+                  : 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600'
+              }`}>
                 {currentUser.name.charAt(0)}
               </div>
               <div className="hidden md:block leading-none text-left">
                 <p className="text-xs font-bold text-slate-900 dark:text-white">{currentUser.name}</p>
-                <span className="text-[9px] text-slate-400 font-bold uppercase">{currentUser.role}</span>
+                <span className={`text-[9px] font-bold uppercase ${
+                  currentUser.role === 'Administrador' ? 'text-blue-500' : 'text-emerald-500'
+                }`}>{currentUser.role}</span>
               </div>
             </div>
 
@@ -860,7 +1380,33 @@ export default function App() {
                 </div>
               ) : (
                 <>
-                  {currentTab === 'dashboard' && (
+                  {/* Central Operacional / Modo Operador */}
+                  {(currentTab === 'operational' || isOperatorOnly) && (
+                    <OperationalView
+                      covenants={db.covenants || []}
+                      logins={db.logins || []}
+                      accessRequests={db.accessRequests || []}
+                      currentUser={currentUser}
+                      darkMode={darkMode}
+                      onAdminSwitch={() => setCurrentTab('accesses')}
+                      onSyncGoogleSheets={() => handleSyncGoogleSheets()}
+                      isSyncingSheets={isSyncingSheets}
+                      onSaveRequest={(item) => handleSaveItem('accessRequests', item)}
+                    />
+                  )}
+
+                  {!isOperatorOnly && currentTab === 'requests' && (
+                    <AccessRequestsQueue
+                      accessRequests={db.accessRequests || []}
+                      covenants={db.covenants || []}
+                      currentUser={currentUser}
+                      darkMode={darkMode}
+                      onSaveRequest={(item) => handleSaveItem('accessRequests', item)}
+                      onDeleteRequest={(id) => handleDeleteItem('accessRequests', id)}
+                    />
+                  )}
+
+                  {!isOperatorOnly && currentTab === 'dashboard' && (
                     <Dashboard
                       db={db}
                       currentUser={currentUser}
@@ -872,35 +1418,26 @@ export default function App() {
                     />
                   )}
 
-                  {currentTab === 'covenants' && (
-                    <Covenants
+                  {!isOperatorOnly && (currentTab === 'accesses' || currentTab === 'covenants' || currentTab === 'logins' || currentTab === 'systems') && (
+                    <Accesses
                       covenants={db.covenants || []}
-                      currentUser={currentUser}
-                      darkMode={darkMode}
-                      onSave={(item) => handleSaveItem('covenants', item)}
-                      onDelete={(id) => handleDeleteItem('covenants', id)}
-                    />
-                  )}
-
-                  {(currentTab === 'logins' || currentTab === 'systems') && (
-                    <Logins
                       logins={db.logins || []}
                       systems={db.systems || []}
-                      covenants={db.covenants || []}
                       currentUser={currentUser}
                       darkMode={darkMode}
-                      initialSystemFilterId={searchFilter?.systemId || ''}
-                      onSave={(item) => handleSaveItem('logins', item)}
-                      onDelete={(id) => handleDeleteItem('logins', id)}
-                      onReserve={handleReserveLogin}
-                      onRelease={handleReleaseLogin}
+                      onSaveCovenant={(item) => handleSaveItem('covenants', item)}
+                      onSaveLogin={(item) => handleSaveItem('logins', item)}
+                      onDeleteCovenant={(id) => handleDeleteItem('covenants', id)}
+                      onDeleteLogin={(id) => handleDeleteItem('logins', id)}
+                      onReserveLogin={handleReserveLogin}
+                      onReleaseLogin={handleReleaseLogin}
                       onLogAction={(actionType, targetId, targetName) => handleLogAction(actionType, 'Login', targetId, targetName)}
                       onSyncGoogleSheets={() => handleSyncGoogleSheets()}
                       isSyncingSheets={isSyncingSheets}
                     />
                   )}
 
-                  {currentTab === 'users' && (
+                  {!isOperatorOnly && currentTab === 'users' && (
                     <Users
                       users={db.users || []}
                       covenants={db.covenants || []}
@@ -911,7 +1448,7 @@ export default function App() {
                     />
                   )}
 
-                  {currentTab === 'history' && (
+                  {!isOperatorOnly && currentTab === 'history' && (
                     <History
                       logs={db.historyLogs || []}
                       currentUser={currentUser}
@@ -919,7 +1456,7 @@ export default function App() {
                     />
                   )}
 
-                  {currentTab === 'settings' && (
+                  {!isOperatorOnly && currentTab === 'settings' && (
                     <Settings
                       config={db.config}
                       darkMode={darkMode}
@@ -931,16 +1468,16 @@ export default function App() {
                     />
                   )}
 
-                  {/* Fallback if currentTab is unmatched */}
-                  {!['dashboard', 'covenants', 'logins', 'systems', 'users', 'history', 'settings'].includes(currentTab) && (
-                    <Dashboard
-                      db={db}
+                  {/* Fallback if currentTab is unmatched and not operator */}
+                  {!isOperatorOnly && !['operational', 'requests', 'dashboard', 'accesses', 'covenants', 'logins', 'systems', 'users', 'history', 'settings'].includes(currentTab) && (
+                    <OperationalView
+                      covenants={db.covenants || []}
+                      logins={db.logins || []}
                       currentUser={currentUser}
                       darkMode={darkMode}
-                      onToggleFavorite={handleToggleFavorite}
-                      onNavigateToTab={handleNavigateToTab}
-                      onReserve={handleReserveLogin}
-                      onRelease={handleReleaseLogin}
+                      onAdminSwitch={() => setCurrentTab('accesses')}
+                      onSyncGoogleSheets={() => handleSyncGoogleSheets()}
+                      isSyncingSheets={isSyncingSheets}
                     />
                   )}
                 </>

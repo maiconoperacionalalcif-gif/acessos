@@ -33,7 +33,7 @@ export default function Users({
   onDelete
 }: UsersProps) {
   const isAdmin = currentUser?.role === 'Administrador';
-  const canEdit = isAdmin || currentUser?.role === 'Supervisor';
+  const canEdit = isAdmin;
   const canDelete = isAdmin;
 
   const [searchTerm, setSearchTerm] = useState('');

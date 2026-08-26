@@ -1,4 +1,4 @@
-import { Covenant, System, Login, User, HistoryLog, SystemConfig, LoginReservationLog } from '../types';
+import { Covenant, System, Login, User, HistoryLog, SystemConfig, LoginReservationLog, AccessRequest } from '../types';
 import { transformGoogleSheetsUrl, parseCSV, syncCsvRowsToDatabase } from './sheetsSync';
 
 export interface FullDatabase {
@@ -7,6 +7,7 @@ export interface FullDatabase {
   covenants: Covenant[];
   systems: System[];
   logins: Login[];
+  accessRequests: AccessRequest[];
   favorites: { systemId: string; userId: string }[];
   reservationLogs: LoginReservationLog[];
   historyLogs: HistoryLog[];
@@ -52,8 +53,8 @@ export async function saveSystemConfig(config: Partial<SystemConfig>): Promise<F
   throw new Error(result.error || 'Erro ao salvar configuração');
 }
 
-// Save Covenant, System, Login, User
-export async function saveEntity(table: 'covenants' | 'systems' | 'logins' | 'users', item: any): Promise<FullDatabase> {
+// Save Covenant, System, Login, User, AccessRequest
+export async function saveEntity(table: 'covenants' | 'systems' | 'logins' | 'users' | 'accessRequests', item: any): Promise<FullDatabase> {
   const response = await fetch('/api/save', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -65,7 +66,7 @@ export async function saveEntity(table: 'covenants' | 'systems' | 'logins' | 'us
 }
 
 // Delete Entity
-export async function deleteEntity(table: 'covenants' | 'systems' | 'logins' | 'users', id: string): Promise<FullDatabase> {
+export async function deleteEntity(table: 'covenants' | 'systems' | 'logins' | 'users' | 'accessRequests', id: string): Promise<FullDatabase> {
   const response = await fetch('/api/delete', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
