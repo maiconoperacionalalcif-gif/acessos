@@ -974,6 +974,13 @@ export default function App() {
                          table === 'logins' ? 'Login' : 
                          table === 'users' ? 'User' : 'AccessRequest';
 
+      // Optimistic state update so UI updates immediately
+      if (db && db[table]) {
+        const filteredArray = (db[table] as any[]).filter((x: any) => x.id !== id);
+        const optimistic = { ...db, [table]: filteredArray };
+        setDb(optimistic as FullDatabase);
+      }
+
       const updatedDb = await api.deleteItem(table, id);
       setDb(updatedDb);
 
@@ -990,11 +997,15 @@ export default function App() {
           timestamp: new Date().toISOString(),
           ip: '192.168.1.14'
         };
-        const finalDb = await api.addLog(log);
-        setDb(finalDb);
+        try {
+          const finalDb = await api.addLog(log);
+          setDb(finalDb);
+        } catch (logErr) {
+          console.warn('Erro ao salvar log de exclusão:', logErr);
+        }
       }
     } catch (err) {
-      console.error(err);
+      console.error('Erro ao deletar item:', err);
     }
   };
 

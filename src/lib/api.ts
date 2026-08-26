@@ -55,26 +55,78 @@ export async function saveSystemConfig(config: Partial<SystemConfig>): Promise<F
 
 // Save Covenant, System, Login, User, AccessRequest
 export async function saveEntity(table: 'covenants' | 'systems' | 'logins' | 'users' | 'accessRequests', item: any): Promise<FullDatabase> {
-  const response = await fetch('/api/save', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ table, item }),
-  });
-  const result = await response.json();
-  if (result.success && result.database) return result.database;
-  throw new Error(result.error || 'Erro ao salvar item');
+  try {
+    const response = await fetch('/api/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ table, item }),
+    });
+    const contentType = response.headers.get('content-type') || '';
+    if (response.ok && contentType.includes('application/json')) {
+      const result = await response.json();
+      if (result.success && result.database) {
+        localStorage.setItem('access_manager_db', JSON.stringify(result.database));
+        return result.database;
+      }
+    }
+  } catch (err) {
+    console.warn(`Erro ao salvar ${table} no backend, salvando no cache local:`, err);
+  }
+
+  // LocalStorage fallback
+  const cached = localStorage.getItem('access_manager_db');
+  let currentDb: FullDatabase | null = null;
+  if (cached) {
+    try { currentDb = JSON.parse(cached); } catch (e) {}
+  }
+  if (currentDb && currentDb[table]) {
+    const arr = currentDb[table] as any[];
+    const idx = arr.findIndex((x: any) => x.id === item.id);
+    if (idx > -1) {
+      arr[idx] = { ...arr[idx], ...item };
+    } else {
+      arr.push(item);
+    }
+    localStorage.setItem('access_manager_db', JSON.stringify(currentDb));
+    return currentDb;
+  }
+
+  throw new Error(`Erro ao salvar item na tabela ${table}`);
 }
 
 // Delete Entity
 export async function deleteEntity(table: 'covenants' | 'systems' | 'logins' | 'users' | 'accessRequests', id: string): Promise<FullDatabase> {
-  const response = await fetch('/api/delete', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ table, id }),
-  });
-  const result = await response.json();
-  if (result.success && result.database) return result.database;
-  throw new Error(result.error || 'Erro ao deletar item');
+  try {
+    const response = await fetch('/api/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ table, id }),
+    });
+    const contentType = response.headers.get('content-type') || '';
+    if (response.ok && contentType.includes('application/json')) {
+      const result = await response.json();
+      if (result.success && result.database) {
+        localStorage.setItem('access_manager_db', JSON.stringify(result.database));
+        return result.database;
+      }
+    }
+  } catch (err) {
+    console.warn(`Erro ao deletar ${table} no backend, excluindo do cache local:`, err);
+  }
+
+  // LocalStorage fallback
+  const cached = localStorage.getItem('access_manager_db');
+  let currentDb: FullDatabase | null = null;
+  if (cached) {
+    try { currentDb = JSON.parse(cached); } catch (e) {}
+  }
+  if (currentDb && currentDb[table]) {
+    currentDb[table] = (currentDb[table] as any[]).filter((x: any) => x.id !== id) as any;
+    localStorage.setItem('access_manager_db', JSON.stringify(currentDb));
+    return currentDb;
+  }
+
+  throw new Error(`Erro ao deletar item da tabela ${table}`);
 }
 
 // Toggle Favorite
