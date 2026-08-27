@@ -11,7 +11,7 @@ export interface User {
   allowedBanks: string[]; // List of Bank names (empty = all)
 }
 
-export type CovenantCategory = 'Prefeituras' | 'Governos' | 'Forças Armadas' | 'Federal' | 'Estadual' | 'Municipal' | 'Militar' | 'INSS' | 'Benefício';
+export type CovenantCategory = 'Federal' | 'Forças Armadas' | 'Estadual' | 'Prefeituras' | 'Governos' | 'Municipal' | 'Militar' | 'INSS' | 'Benefício';
 
 export type AccessRequestCategory = 'Federal' | 'Estadual' | 'Prefeitura';
 export type AccessRequestStatus = 'Pendente' | 'Em Andamento' | 'Concluído' | 'Rejeitado';

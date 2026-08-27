@@ -594,22 +594,6 @@ export default function OperationalView({
               </button>
             )}
 
-            {onSyncGoogleSheets && (
-              <button
-                onClick={onSyncGoogleSheets}
-                disabled={isSyncingSheets}
-                className={`flex items-center gap-1.5 px-3 py-2 border rounded-xl text-xs font-semibold cursor-pointer transition-colors ${
-                  darkMode 
-                    ? 'border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700' 
-                    : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50 shadow-2xs'
-                }`}
-                title="Atualizar acessos com a planilha"
-              >
-                <RefreshCw size={14} className={isSyncingSheets ? "animate-spin text-emerald-500" : "text-emerald-500"} />
-                <span className="hidden sm:inline">Atualizar</span>
-              </button>
-            )}
-
             {currentUser?.role === 'Administrador' && onAdminSwitch && (
               <button
                 onClick={onAdminSwitch}

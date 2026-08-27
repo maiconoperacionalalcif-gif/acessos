@@ -183,8 +183,8 @@ export default function Accesses({
     return ['Todos', ...Array.from(set).sort((a, b) => a.localeCompare(b))];
   }, [covenants]);
 
-  // Categories
-  const categories: CovenantCategory[] = ['Federal', 'Estadual', 'Municipal', 'Militar', 'INSS', 'Benefício'];
+  // Categories requested: FEDERAL, FORÇAS ARMADAS, ESTADUAL, PREFEITURAS
+  const categories: CovenantCategory[] = ['Federal', 'Forças Armadas', 'Estadual', 'Prefeituras'];
 
   // Handle Copy
   const handleCopyText = (text: string, id: string, label: string) => {
@@ -325,7 +325,7 @@ export default function Accesses({
     const newCov: Partial<Covenant> = {
       id: `cov-${Date.now()}`,
       name: '',
-      category: 'Municipal',
+      category: 'Federal',
       state: 'SP',
       login: '',
       password: '',
@@ -344,7 +344,13 @@ export default function Accesses({
 
   // Open Edit Covenant & Logins Modal
   const openEditCovenantModal = (cov: Covenant) => {
-    setEditingCovenant({ ...cov });
+    // Map category if needed
+    let matchedCategory: CovenantCategory = cov.category || 'Federal';
+    if (matchedCategory === 'Municipal') matchedCategory = 'Prefeituras';
+    if (matchedCategory === 'Governos') matchedCategory = 'Estadual';
+    if (matchedCategory === 'Militar') matchedCategory = 'Forças Armadas';
+
+    setEditingCovenant({ ...cov, category: matchedCategory });
     const existingLogins = getCovenantLogins(cov);
     if (existingLogins.length > 0) {
       setModalBankLogins(existingLogins.map(l => ({
@@ -368,18 +374,19 @@ export default function Accesses({
   const handleSaveUnifiedAccess = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingCovenant?.name?.trim()) {
-      alert('Por favor, informe o Nome do Convênio / Órgão.');
+      alert('Por favor, informe o Nome do Convênio.');
       return;
     }
 
     setIsSavingAccess(true);
     try {
       const primaryLogin = modalBankLogins[0];
+      const isFederalOrForces = editingCovenant.category === 'Federal' || editingCovenant.category === 'Forças Armadas';
       const covenantData: Covenant = {
         id: editingCovenant.id || `cov-${Date.now()}`,
         name: editingCovenant.name.trim(),
-        category: editingCovenant.category || 'Municipal',
-        state: editingCovenant.state || 'SP',
+        category: editingCovenant.category || 'Federal',
+        state: isFederalOrForces ? '' : (editingCovenant.state || 'SP'),
         city: editingCovenant.city || '',
         managerUrl: editingCovenant.managerUrl?.trim() || '',
         observations: editingCovenant.observations?.trim() || '',
@@ -607,20 +614,6 @@ export default function Accesses({
 
         {/* Action Buttons */}
         <div className="flex flex-wrap items-center gap-2.5">
-          {onSyncGoogleSheets && (
-            <button
-              onClick={onSyncGoogleSheets}
-              disabled={isSyncingSheets}
-              className={`flex items-center gap-1.5 px-3.5 py-2.5 border rounded-xl text-xs font-semibold cursor-pointer transition-colors ${
-                darkMode ? 'border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-750' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50 shadow-2xs'
-              }`}
-              title="Sincronizar com Planilha Google"
-            >
-              <RefreshCw size={14} className={isSyncingSheets ? "animate-spin text-emerald-500" : "text-emerald-500"} />
-              <span className="hidden sm:inline">Sincronizar</span>
-            </button>
-          )}
-
           <button
             onClick={handleExportExcel}
             className={`flex items-center gap-1.5 px-3.5 py-2.5 border rounded-xl text-xs font-semibold cursor-pointer transition-colors ${
@@ -1385,233 +1378,334 @@ export default function Accesses({
               </button>
             </div>
 
-            <form onSubmit={handleSaveUnifiedAccess} className="p-6 space-y-5 max-h-[80vh] overflow-y-auto">
+            <form onSubmit={handleSaveUnifiedAccess} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
               
-              {/* SECTION: DADOS DO CONVÊNIO */}
-              <div className="space-y-3">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400 flex items-center gap-1.5">
-                  <Building size={14} />
-                  <span>Dados do Órgão / Convênio</span>
-                </h4>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div className="md:col-span-2 space-y-1">
-                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                      Nome do Convênio / Prefeitura <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="Ex: Prefeitura de São Paulo, Governo de Minas Gerais, Exército Brasileiro..."
-                      value={editingCovenant?.name || ''}
-                      onChange={(e) => setEditingCovenant({ ...editingCovenant, name: e.target.value })}
-                      className={`w-full px-3.5 py-2 rounded-xl text-xs font-semibold border outline-none focus:ring-2 focus:ring-blue-500/20 ${
-                        darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'
-                      }`}
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                      Esfera / Categoria <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      value={editingCovenant?.category || 'Municipal'}
-                      onChange={(e) => setEditingCovenant({ ...editingCovenant, category: e.target.value as CovenantCategory })}
-                      className={`w-full px-3.5 py-2 rounded-xl text-xs font-semibold border outline-none cursor-pointer ${
-                        darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'
-                      }`}
-                    >
-                      {categories.map(c => (
-                        <option key={c} value={c}>{c}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                      Estado (UF) <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      value={editingCovenant?.state || 'SP'}
-                      onChange={(e) => setEditingCovenant({ ...editingCovenant, state: e.target.value })}
-                      className={`w-full px-3.5 py-2 rounded-xl text-xs font-semibold border outline-none cursor-pointer ${
-                        darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'
-                      }`}
-                    >
-                      {BRAZILIAN_STATES.map(s => (
-                        <option key={s.uf} value={s.uf}>{s.uf} - {s.name}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                      Status do Convênio
-                    </label>
-                    <select
-                      value={editingCovenant?.status || 'Ativo'}
-                      onChange={(e) => setEditingCovenant({ ...editingCovenant, status: e.target.value as any })}
-                      className={`w-full px-3.5 py-2 rounded-xl text-xs font-semibold border outline-none cursor-pointer ${
-                        darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'
-                      }`}
-                    >
-                      <option value="Ativo">Ativo</option>
-                      <option value="Bloqueado">Bloqueado</option>
-                      <option value="Em manutenção">Em manutenção</option>
-                    </select>
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                      Link / URL do Portal Gestor
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="https://portaldoservidor.sp.gov.br..."
-                      value={editingCovenant?.managerUrl || ''}
-                      onChange={(e) => setEditingCovenant({ ...editingCovenant, managerUrl: e.target.value })}
-                      className={`w-full px-3.5 py-2 rounded-xl text-xs font-semibold border outline-none ${
-                        darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'
-                      }`}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* SECTION: CREDENCIAIS BANCÁRIAS ASSOCIADAS */}
-              <div className="space-y-3 pt-3 border-t dark:border-slate-800">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400 flex items-center gap-1.5">
-                    <KeyRound size={14} />
-                    <span>Credenciais Bancárias Vinculadas</span>
-                  </h4>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setModalBankLogins([...modalBankLogins, { bank: 'Itaú Consignado', username: '', password: '', status: 'Ativo' }]);
-                    }}
-                    className="flex items-center gap-1 text-xs font-bold text-blue-600 hover:underline cursor-pointer"
-                  >
-                    <Plus size={14} />
-                    <span>Adicionar Banco</span>
-                  </button>
-                </div>
-
-                <div className="space-y-3">
-                  {modalBankLogins.map((item, index) => (
-                    <div
-                      key={index}
-                      className={`p-3.5 rounded-xl border space-y-2.5 transition-all ${
-                        darkMode ? 'bg-slate-800/70 border-slate-700' : 'bg-slate-50 border-slate-200'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
-                          <Landmark size={13} className="text-blue-500" />
-                          <span>Banco #{index + 1}</span>
-                        </span>
-
-                        {modalBankLogins.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setModalBankLogins(modalBankLogins.filter((_, i) => i !== index));
-                            }}
-                            className="p-1 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 rounded cursor-pointer"
-                            title="Remover este banco"
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        )}
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                        {/* Bank Name */}
-                        <div>
-                          <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Banco</label>
-                          <input
-                            type="text"
-                            required
-                            placeholder="Ex: Itaú, Bradesco, BB, Pan..."
-                            value={item.bank}
-                            onChange={(e) => {
-                              const updated = [...modalBankLogins];
-                              updated[index].bank = e.target.value;
-                              setModalBankLogins(updated);
-                            }}
-                            className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold border outline-none ${
-                              darkMode ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'
-                            }`}
-                          />
-                        </div>
-
-                        {/* Username */}
-                        <div>
-                          <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Usuário</label>
-                          <input
-                            type="text"
-                            placeholder="Usuário / Matrícula..."
-                            value={item.username}
-                            onChange={(e) => {
-                              const updated = [...modalBankLogins];
-                              updated[index].username = e.target.value;
-                              setModalBankLogins(updated);
-                            }}
-                            className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold border outline-none ${
-                              darkMode ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'
-                            }`}
-                          />
-                        </div>
-
-                        {/* Password */}
-                        <div>
-                          <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Senha</label>
-                          <div className="relative">
-                            <input
-                              type={showModalPassword ? "text" : "password"}
-                              placeholder="Senha..."
-                              value={item.password}
-                              onChange={(e) => {
-                                const updated = [...modalBankLogins];
-                                updated[index].password = e.target.value;
-                                setModalBankLogins(updated);
-                              }}
-                              className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold border outline-none pr-8 ${
-                                darkMode ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'
-                              }`}
-                            />
-                            <button
-                              type="button"
-                              onClick={() => setShowModalPassword(!showModalPassword)}
-                              className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
-                            >
-                              {showModalPassword ? <EyeOff size={13} /> : <Eye size={13} />}
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* SECTION: OBSERVAÇÕES */}
-              <div className="space-y-1 pt-2 border-t dark:border-slate-800">
+              {/* NOME DO CONVÊNIO */}
+              <div className="space-y-1">
                 <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                  Observações Gerais
+                  NOME DO CONVÊNIO <span className="text-red-500">*</span>
                 </label>
-                <textarea
-                  rows={2}
-                  placeholder="Informações adicionais sobre margem, corte de folha, regras do convênio..."
-                  value={editingCovenant?.observations || ''}
-                  onChange={(e) => setEditingCovenant({ ...editingCovenant, observations: e.target.value })}
-                  className={`w-full p-2.5 rounded-xl text-xs font-medium border outline-none resize-none ${
+                <input
+                  type="text"
+                  required
+                  placeholder="Ex: Prefeitura de São Paulo, Governo de Minas Gerais, Exército Brasileiro..."
+                  value={editingCovenant?.name || ''}
+                  onChange={(e) => setEditingCovenant({ ...editingCovenant, name: e.target.value })}
+                  className={`w-full px-3.5 py-2.5 rounded-xl text-xs font-semibold border outline-none focus:ring-2 focus:ring-blue-500/20 ${
                     darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'
                   }`}
                 />
               </div>
+
+              {/* TIPO & ESTADO */}
+              {(() => {
+                const isFederalOrForces = editingCovenant?.category === 'Federal' || editingCovenant?.category === 'Forças Armadas';
+                return (
+                  <div className={`grid ${isFederalOrForces ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2'} gap-3`}>
+                    {/* TIPO: FEDERAL, FORÇAS ARMADAS, ESTADUAL, PREFEITURAS */}
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                        TIPO <span className="text-red-500">*</span>
+                      </label>
+                      <select
+                        value={editingCovenant?.category || 'Federal'}
+                        onChange={(e) => {
+                          const newCat = e.target.value as CovenantCategory;
+                          setEditingCovenant({
+                            ...editingCovenant,
+                            category: newCat,
+                            state: (newCat === 'Federal' || newCat === 'Forças Armadas') ? '' : (editingCovenant?.state || 'SP')
+                          });
+                        }}
+                        className={`w-full px-3.5 py-2.5 rounded-xl text-xs font-semibold border outline-none cursor-pointer ${
+                          darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'
+                        }`}
+                      >
+                        <option value="Federal">FEDERAL</option>
+                        <option value="Forças Armadas">FORÇAS ARMADAS</option>
+                        <option value="Estadual">ESTADUAL</option>
+                        <option value="Prefeituras">PREFEITURAS</option>
+                      </select>
+                    </div>
+
+                    {/* ESTADO(SELECIONAVEL COM TODOS OS ESTADOS - SOME SE FEDERAL OU FORÇAS ARMADAS) */}
+                    {!isFederalOrForces && (
+                      <div className="space-y-1">
+                        <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                          ESTADO <span className="text-red-500">*</span>
+                        </label>
+                        <select
+                          value={editingCovenant?.state || 'SP'}
+                          onChange={(e) => setEditingCovenant({ ...editingCovenant, state: e.target.value })}
+                          className={`w-full px-3.5 py-2.5 rounded-xl text-xs font-semibold border outline-none cursor-pointer ${
+                            darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'
+                          }`}
+                        >
+                          {BRAZILIAN_STATES.map(s => (
+                            <option key={s.uf} value={s.uf}>{s.uf} - {s.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* BANCO */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  BANCO <span className="text-red-500">*</span>
+                </label>
+                <div className="flex flex-wrap gap-1.5 mb-1">
+                  {['Itaú Consignado', 'Banco do Brasil', 'Bradesco Promotora', 'Santander', 'Caixa Econômica', 'Banco Pan', 'Banco Daycoval', 'Banco BMG', 'Banco Safra', 'C6 Consig', 'Banrisul'].map(b => (
+                    <button
+                      type="button"
+                      key={b}
+                      onClick={() => {
+                        const updated = [...modalBankLogins];
+                        if (updated.length === 0) updated.push({ bank: b, username: '', password: '', status: 'Ativo' });
+                        else updated[0].bank = b;
+                        setModalBankLogins(updated);
+                        setEditingCovenant({ ...editingCovenant, bank: b });
+                      }}
+                      className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold border cursor-pointer ${
+                        (modalBankLogins[0]?.bank === b || editingCovenant?.bank === b)
+                          ? 'bg-blue-600 text-white border-blue-600'
+                          : darkMode ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-slate-100 border-slate-200 text-slate-700'
+                      }`}
+                    >
+                      {b}
+                    </button>
+                  ))}
+                </div>
+                <input
+                  type="text"
+                  required
+                  placeholder="Nome do Banco (Ex: Itaú, Banco do Brasil, Bradesco...)"
+                  value={modalBankLogins[0]?.bank || editingCovenant?.bank || ''}
+                  onChange={(e) => {
+                    const updated = [...modalBankLogins];
+                    if (updated.length === 0) {
+                      updated.push({ bank: e.target.value, username: '', password: '', status: 'Ativo' });
+                    } else {
+                      updated[0].bank = e.target.value;
+                    }
+                    setModalBankLogins(updated);
+                    setEditingCovenant({ ...editingCovenant, bank: e.target.value });
+                  }}
+                  className={`w-full px-3.5 py-2.5 rounded-xl text-xs font-semibold border outline-none ${
+                    darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'
+                  }`}
+                />
+              </div>
+
+              {/* LOGIN & SENHA */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    LOGIN <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Usuário / Login..."
+                    value={modalBankLogins[0]?.username ?? editingCovenant?.login ?? ''}
+                    onChange={(e) => {
+                      const updated = [...modalBankLogins];
+                      if (updated.length === 0) {
+                        updated.push({ bank: editingCovenant?.bank || 'Itaú Consignado', username: e.target.value, password: '', status: 'Ativo' });
+                      } else {
+                        updated[0].username = e.target.value;
+                      }
+                      setModalBankLogins(updated);
+                      setEditingCovenant({ ...editingCovenant, login: e.target.value });
+                    }}
+                    className={`w-full px-3.5 py-2.5 rounded-xl text-xs font-semibold border outline-none ${
+                      darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'
+                    }`}
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    SENHA <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showModalPassword ? "text" : "password"}
+                      required
+                      placeholder="Senha de acesso..."
+                      value={modalBankLogins[0]?.password ?? editingCovenant?.password ?? ''}
+                      onChange={(e) => {
+                        const updated = [...modalBankLogins];
+                        if (updated.length === 0) {
+                          updated.push({ bank: editingCovenant?.bank || 'Itaú Consignado', username: '', password: e.target.value, status: 'Ativo' });
+                        } else {
+                          updated[0].password = e.target.value;
+                        }
+                        setModalBankLogins(updated);
+                        setEditingCovenant({ ...editingCovenant, password: e.target.value });
+                      }}
+                      className={`w-full px-3.5 py-2.5 rounded-xl text-xs font-semibold border outline-none pr-9 ${
+                        darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'
+                      }`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowModalPassword(!showModalPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+                    >
+                      {showModalPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* STATUS */}
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  STATUS <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={modalBankLogins[0]?.status || editingCovenant?.status || 'Ativo'}
+                  onChange={(e) => {
+                    const updated = [...modalBankLogins];
+                    if (updated.length === 0) {
+                      updated.push({ bank: editingCovenant?.bank || 'Itaú Consignado', username: '', password: '', status: e.target.value as LoginStatus });
+                    } else {
+                      updated[0].status = e.target.value as LoginStatus;
+                    }
+                    setModalBankLogins(updated);
+                    setEditingCovenant({ ...editingCovenant, status: e.target.value as any });
+                  }}
+                  className={`w-full px-3.5 py-2.5 rounded-xl text-xs font-semibold border outline-none cursor-pointer ${
+                    darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'
+                  }`}
+                >
+                  <option value="Ativo">Ativo</option>
+                  <option value="Bloqueado">Bloqueado</option>
+                  <option value="Em manutenção">Em manutenção</option>
+                </select>
+              </div>
+
+              {/* OUTROS BANCOS / CREDENCIAIS ADICIONAIS (SE HOUVER) */}
+              {modalBankLogins.length > 1 && (
+                <div className="space-y-3 pt-3 border-t dark:border-slate-800">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                      Bancos Adicionais Vinculados ({modalBankLogins.length - 1})
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setModalBankLogins([...modalBankLogins, { bank: '', username: '', password: '', status: 'Ativo' }]);
+                      }}
+                      className="flex items-center gap-1 text-xs font-bold text-blue-600 hover:underline cursor-pointer"
+                    >
+                      <Plus size={14} />
+                      <span>Adicionar Mais um Banco</span>
+                    </button>
+                  </div>
+
+                  <div className="space-y-3">
+                    {modalBankLogins.slice(1).map((item, relIndex) => {
+                      const index = relIndex + 1;
+                      return (
+                        <div
+                          key={index}
+                          className={`p-3 rounded-xl border space-y-2 ${
+                            darkMode ? 'bg-slate-800/70 border-slate-700' : 'bg-slate-50 border-slate-200'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+                              <Landmark size={13} className="text-blue-500" />
+                              <span>Banco Adicional #{index}</span>
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setModalBankLogins(modalBankLogins.filter((_, i) => i !== index));
+                              }}
+                              className="p-1 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 rounded cursor-pointer"
+                              title="Remover"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                            <div>
+                              <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Banco</label>
+                              <input
+                                type="text"
+                                required
+                                placeholder="Nome do Banco..."
+                                value={item.bank}
+                                onChange={(e) => {
+                                  const updated = [...modalBankLogins];
+                                  updated[index].bank = e.target.value;
+                                  setModalBankLogins(updated);
+                                }}
+                                className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold border outline-none ${
+                                  darkMode ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'
+                                }`}
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Usuário / Login</label>
+                              <input
+                                type="text"
+                                placeholder="Login..."
+                                value={item.username}
+                                onChange={(e) => {
+                                  const updated = [...modalBankLogins];
+                                  updated[index].username = e.target.value;
+                                  setModalBankLogins(updated);
+                                }}
+                                className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold border outline-none ${
+                                  darkMode ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'
+                                }`}
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Senha</label>
+                              <input
+                                type="text"
+                                placeholder="Senha..."
+                                value={item.password}
+                                onChange={(e) => {
+                                  const updated = [...modalBankLogins];
+                                  updated[index].password = e.target.value;
+                                  setModalBankLogins(updated);
+                                }}
+                                className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold border outline-none ${
+                                  darkMode ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'
+                                }`}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {modalBankLogins.length <= 1 && (
+                <div className="pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setModalBankLogins([...modalBankLogins, { bank: '', username: '', password: '', status: 'Ativo' }]);
+                    }}
+                    className="flex items-center gap-1.5 text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                  >
+                    <Plus size={14} />
+                    <span>+ Adicionar outro banco a este convênio</span>
+                  </button>
+                </div>
+              )}
 
               {/* Actions */}
               <div className="pt-3 border-t flex items-center justify-end gap-2 dark:border-slate-800">
@@ -1629,7 +1723,7 @@ export default function Accesses({
                   disabled={isSavingAccess}
                   className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer disabled:opacity-50"
                 >
-                  {isSavingAccess ? 'Salvando...' : 'Salvar Acesso Completo'}
+                  {isSavingAccess ? 'Salvando...' : 'Salvar Cadastro'}
                 </button>
               </div>
             </form>
