@@ -27,13 +27,14 @@ import { BRAZILIAN_STATES } from './OperationalView';
 
 export interface ParsedImportRow {
   id: string;
-  convenio: string;
-  estado: string;
-  login: string;
-  senha: string;
-  banco: string;
-  linkGestora: string;
-  category: CovenantCategory;
+  convenio: string;      // Coluna A
+  estado: string;        // Coluna B
+  tipo: string;          // Coluna C (Texto digitado)
+  category: CovenantCategory; // Categoria normalizada
+  login: string;         // Coluna D
+  senha: string;         // Coluna E
+  banco: string;         // Coluna F
+  linkGestora: string;   // Coluna G
   isExistingCovenant: boolean;
   matchedCovenantId?: string;
   isValid: boolean;
@@ -131,6 +132,40 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
     return 'Prefeituras';
   };
 
+  // Helper to parse Column C (TIPO) explicitly into CovenantCategory
+  const parseCovenantType = (rawTipo: any, rawConvenio: string, rawUf: string): CovenantCategory => {
+    const norm = normalizeText(String(rawTipo || ''));
+    if (norm.includes('governo') || norm.includes('estadual') || norm.includes('estado') || norm === 'gov') {
+      return 'Governos';
+    }
+    if (norm.includes('prefeitura') || norm.includes('municipal') || norm.includes('municipio') || norm === 'pref' || norm === 'pm') {
+      return 'Prefeituras';
+    }
+    if (
+      norm.includes('forca') || 
+      norm.includes('exercito') || 
+      norm.includes('marinha') || 
+      norm.includes('aeronautica') || 
+      norm.includes('militar') || 
+      norm.includes('cpex') || 
+      norm.includes('papem') || 
+      norm.includes('dirap')
+    ) {
+      return 'Forças Armadas';
+    }
+    if (
+      norm.includes('federal') || 
+      norm.includes('siape') || 
+      norm.includes('sougov') || 
+      norm.includes('uniao') || 
+      norm.includes('ministerio')
+    ) {
+      return 'Federal';
+    }
+
+    return inferCategory(rawConvenio, rawUf);
+  };
+
   // Helper to normalize UF
   const normalizeUF = (rawUf: any): string => {
     if (!rawUf) return '';
@@ -143,40 +178,53 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
     return foundState ? foundState.uf : (clean.length <= 3 ? clean : '');
   };
 
-  // Download Sample Excel Template (.xlsx)
+  // Download Sample Excel Template (.xlsx) with exact 7 columns
   const handleDownloadTemplate = () => {
     const templateData = [
       {
         'CONVÊNIO': 'Prefeitura de São Paulo',
         'SIGLAS DO ESTADO': 'SP',
+        'TIPO': 'PREFEITURAS',
         'LOGIN': 'pmsp.itau01',
         'SENHA': 'Senha#2026',
         'BANCO': 'Itaú',
         'LINK DA GESTORA': 'https://pmsp.consiglog.com.br'
       },
       {
+        'CONVÊNIO': 'Governo do Estado da Bahia',
+        'SIGLAS DO ESTADO': 'BA',
+        'TIPO': 'GOVERNOS',
+        'LOGIN': 'saeb.itau.op',
+        'SENHA': 'BaGovPass@2026',
+        'BANCO': 'Itaú',
+        'LINK DA GESTORA': 'https://www.portaldoservidor.ba.gov.br'
+      },
+      {
         'CONVÊNIO': 'Governo do Estado do Rio de Janeiro',
         'SIGLAS DO ESTADO': 'RJ',
+        'TIPO': 'GOVERNOS',
         'LOGIN': 'govrj.bb.operador',
         'SENHA': 'RjPass@2026',
         'BANCO': 'Banco do Brasil',
         'LINK DA GESTORA': 'https://proderj.rj.gov.br'
       },
       {
-        'CONVÊNIO': 'Governo de Minas Gerais',
-        'SIGLAS DO ESTADO': 'MG',
-        'LOGIN': 'mg.daycoval01',
-        'SENHA': 'DayPass#2026',
-        'BANCO': 'Banco Daycoval',
-        'LINK DA GESTORA': 'https://portaldoservidor.mg.gov.br'
-      },
-      {
         'CONVÊNIO': 'SIAPE / SouGov (Servidores Federais)',
         'SIGLAS DO ESTADO': 'DF',
+        'TIPO': 'FEDERAL',
         'LOGIN': 'siape.sant01',
         'SENHA': 'SantPass@2026',
         'BANCO': 'Santander',
         'LINK DA GESTORA': 'https://www.gov.br/sougov'
+      },
+      {
+        'CONVÊNIO': 'Comando do Exército - CPEx',
+        'SIGLAS DO ESTADO': 'DF',
+        'TIPO': 'FORÇAS ARMADAS',
+        'LOGIN': 'cpex.bb01',
+        'SENHA': 'MilPass#2026',
+        'BANCO': 'Banco do Brasil',
+        'LINK DA GESTORA': 'https://www.cpex.eb.mil.br'
       }
     ];
 
@@ -184,12 +232,13 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
 
     // Set column widths
     worksheet['!cols'] = [
-      { wch: 38 }, // CONVÊNIO
-      { wch: 18 }, // SIGLAS DO ESTADO
-      { wch: 22 }, // LOGIN
-      { wch: 20 }, // SENHA
-      { wch: 22 }, // BANCO
-      { wch: 40 }  // LINK DA GESTORA
+      { wch: 38 }, // A: CONVÊNIO
+      { wch: 18 }, // B: SIGLAS DO ESTADO
+      { wch: 22 }, // C: TIPO
+      { wch: 22 }, // D: LOGIN
+      { wch: 20 }, // E: SENHA
+      { wch: 22 }, // F: BANCO
+      { wch: 40 }  // G: LINK DA GESTORA
     ];
 
     const workbook = XLSX.utils.book_new();
@@ -232,6 +281,9 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
           firstRowStr.includes('convênio') ||
           firstRowStr.includes('estado') ||
           firstRowStr.includes('sigla') ||
+          firstRowStr.includes('tipo') ||
+          firstRowStr.includes('categoria') ||
+          firstRowStr.includes('esfera') ||
           firstRowStr.includes('uf') ||
           firstRowStr.includes('login') ||
           firstRowStr.includes('usuario') ||
@@ -249,19 +301,21 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
           // Columns Mapping:
           // A (0) = CONVÊNIO
           // B (1) = SIGLAS DO ESTADO
-          // C (2) = LOGIN
-          // D (3) = SENHA
-          // E (4) = BANCO
-          // F (5) = LINK DA GESTORA
+          // C (2) = TIPO (GOVERNOS, PREFEITURAS, FEDERAL OU FORÇAS ARMADAS)
+          // D (3) = LOGIN
+          // E (4) = SENHA
+          // F (5) = BANCO
+          // G (6) = LINK DA GESTORA
           const colA = String(r[0] || '').trim();
           const colB = normalizeUF(r[1]);
           const colC = String(r[2] || '').trim();
           const colD = String(r[3] || '').trim();
           const colE = String(r[4] || '').trim();
           const colF = String(r[5] || '').trim();
+          const colG = String(r[6] || '').trim();
 
           // Skip empty rows
-          if (!colA && !colB && !colC && !colD && !colE && !colF) {
+          if (!colA && !colB && !colC && !colD && !colE && !colF && !colG) {
             return;
           }
 
@@ -271,9 +325,9 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
           if (!colA) {
             isValid = false;
             validationError = 'Nome do convênio obrigatório (Coluna A).';
-          } else if (!colC) {
+          } else if (!colD) {
             isValid = false;
-            validationError = 'Login/Usuário obrigatório (Coluna C).';
+            validationError = 'Login/Usuário obrigatório (Coluna D).';
           }
 
           // Check if covenant already exists
@@ -284,17 +338,18 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
             return matchName && matchState;
           });
 
-          const inferredCat = inferCategory(colA, colB);
+          const finalCategory = parseCovenantType(colC, colA, colB);
 
           resultList.push({
             id: `row-${idx + 1}-${Date.now()}`,
             convenio: colA || 'Convênio Não Informado',
             estado: colB || 'BR',
-            login: colC || '',
-            senha: colD || '',
-            banco: colE || 'Geral',
-            linkGestora: colF || '',
-            category: inferredCat,
+            tipo: colC || finalCategory,
+            category: finalCategory,
+            login: colD || '',
+            senha: colE || '',
+            banco: colF || 'Geral',
+            linkGestora: colG || '',
             isExistingCovenant: !!matchedCovenant,
             matchedCovenantId: matchedCovenant?.id,
             isValid,
@@ -347,6 +402,8 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
     return (
       normalizeText(row.convenio).includes(s) ||
       normalizeText(row.estado).includes(s) ||
+      normalizeText(row.tipo).includes(s) ||
+      normalizeText(row.category).includes(s) ||
       normalizeText(row.login).includes(s) ||
       normalizeText(row.banco).includes(s) ||
       normalizeText(row.linkGestora).includes(s)
@@ -523,7 +580,7 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
                   ? 'border-slate-700 bg-slate-800 hover:bg-slate-750 text-slate-200' 
                   : 'border-slate-300 bg-white hover:bg-slate-50 text-slate-700 shadow-2xs'
               }`}
-              title="Baixar planilha modelo com as 6 colunas formatadas"
+              title="Baixar planilha modelo com as 7 colunas formatadas (A até G)"
             >
               <Download size={14} className="text-emerald-500" />
               <span className="hidden sm:inline">Baixar Modelo (.xlsx)</span>
@@ -549,10 +606,10 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
           }`}>
             <div className="flex items-center gap-2 text-xs font-bold text-blue-600 dark:text-blue-400">
               <Info size={16} />
-              <span>Formatação Exata das Colunas da Planilha (A até F):</span>
+              <span>Formatação Exata das Colunas da Planilha (A até G):</span>
             </div>
             
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 text-xs">
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 text-xs">
               <div className={`p-2 rounded-lg border text-center ${
                 darkMode ? 'bg-slate-900 border-slate-750' : 'bg-white border-blue-200/80 shadow-2xs'
               }`}>
@@ -573,14 +630,22 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
                 darkMode ? 'bg-slate-900 border-slate-750' : 'bg-white border-blue-200/80 shadow-2xs'
               }`}>
                 <span className="text-[10px] font-black text-blue-600 block uppercase">Coluna C</span>
-                <strong className="text-slate-900 dark:text-white text-xs">LOGIN</strong>
-                <span className="text-[10px] text-slate-400 block truncate">Usuário da conta</span>
+                <strong className="text-slate-900 dark:text-white text-xs">TIPO</strong>
+                <span className="text-[10px] text-slate-400 block truncate">Gov, Pref, Fed, FA</span>
               </div>
 
               <div className={`p-2 rounded-lg border text-center ${
                 darkMode ? 'bg-slate-900 border-slate-750' : 'bg-white border-blue-200/80 shadow-2xs'
               }`}>
                 <span className="text-[10px] font-black text-blue-600 block uppercase">Coluna D</span>
+                <strong className="text-slate-900 dark:text-white text-xs">LOGIN</strong>
+                <span className="text-[10px] text-slate-400 block truncate">Usuário do acesso</span>
+              </div>
+
+              <div className={`p-2 rounded-lg border text-center ${
+                darkMode ? 'bg-slate-900 border-slate-750' : 'bg-white border-blue-200/80 shadow-2xs'
+              }`}>
+                <span className="text-[10px] font-black text-blue-600 block uppercase">Coluna E</span>
                 <strong className="text-slate-900 dark:text-white text-xs">SENHA</strong>
                 <span className="text-[10px] text-slate-400 block truncate">Senha de acesso</span>
               </div>
@@ -588,7 +653,7 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
               <div className={`p-2 rounded-lg border text-center ${
                 darkMode ? 'bg-slate-900 border-slate-750' : 'bg-white border-blue-200/80 shadow-2xs'
               }`}>
-                <span className="text-[10px] font-black text-blue-600 block uppercase">Coluna E</span>
+                <span className="text-[10px] font-black text-blue-600 block uppercase">Coluna F</span>
                 <strong className="text-slate-900 dark:text-white text-xs">BANCO</strong>
                 <span className="text-[10px] text-slate-400 block truncate">Itaú, BB, etc.</span>
               </div>
@@ -596,7 +661,7 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
               <div className={`p-2 rounded-lg border text-center ${
                 darkMode ? 'bg-slate-900 border-slate-750' : 'bg-white border-blue-200/80 shadow-2xs'
               }`}>
-                <span className="text-[10px] font-black text-blue-600 block uppercase">Coluna F</span>
+                <span className="text-[10px] font-black text-blue-600 block uppercase">Coluna G</span>
                 <strong className="text-slate-900 dark:text-white text-xs">LINK GESTORA</strong>
                 <span className="text-[10px] text-slate-400 block truncate">URL do portal</span>
               </div>
@@ -736,10 +801,11 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
                       <th className="py-2.5 px-3">#</th>
                       <th className="py-2.5 px-3">Convênio (Col A)</th>
                       <th className="py-2.5 px-2">UF (Col B)</th>
-                      <th className="py-2.5 px-3">Login (Col C)</th>
-                      <th className="py-2.5 px-3">Senha (Col D)</th>
-                      <th className="py-2.5 px-3">Banco (Col E)</th>
-                      <th className="py-2.5 px-3">Link Gestora (Col F)</th>
+                      <th className="py-2.5 px-3">Tipo (Col C)</th>
+                      <th className="py-2.5 px-3">Login (Col D)</th>
+                      <th className="py-2.5 px-3">Senha (Col E)</th>
+                      <th className="py-2.5 px-3">Banco (Col F)</th>
+                      <th className="py-2.5 px-3">Link Gestora (Col G)</th>
                       <th className="py-2.5 px-2">Status</th>
                       <th className="py-2.5 px-2 text-center">Ação</th>
                     </tr>
@@ -758,7 +824,7 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
                           {idx + 1}
                         </td>
                         
-                        {/* Convênio */}
+                        {/* Convênio (Col A) */}
                         <td className="py-2 px-3 font-semibold text-slate-900 dark:text-white max-w-[180px] truncate">
                           <span>{row.convenio}</span>
                           {row.isExistingCovenant && (
@@ -768,19 +834,34 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
                           )}
                         </td>
 
-                        {/* UF */}
+                        {/* UF (Col B) */}
                         <td className="py-2 px-2">
                           <span className="px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 font-mono font-bold text-[11px]">
                             {row.estado || 'BR'}
                           </span>
                         </td>
 
-                        {/* Login */}
-                        <td className="py-2 px-3 font-mono text-slate-800 dark:text-slate-200">
+                        {/* Tipo (Col C) */}
+                        <td className="py-2 px-3">
+                          <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold inline-block ${
+                            row.category === 'Governos'
+                              ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
+                              : row.category === 'Prefeituras'
+                              ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20'
+                              : row.category === 'Federal'
+                              ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20'
+                              : 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20'
+                          }`}>
+                            {row.tipo || row.category}
+                          </span>
+                        </td>
+
+                        {/* Login (Col D) */}
+                        <td className="py-2 px-3 font-mono text-slate-800 dark:text-slate-200 font-medium">
                           {row.login || <span className="text-rose-500 italic">Vazio</span>}
                         </td>
 
-                        {/* Senha */}
+                        {/* Senha (Col E) */}
                         <td className="py-2 px-3 font-mono text-slate-600 dark:text-slate-300">
                           {showPasswords ? (
                             row.senha || <span className="text-slate-400 italic">Sem senha</span>
@@ -789,12 +870,12 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
                           )}
                         </td>
 
-                        {/* Banco */}
+                        {/* Banco (Col F) */}
                         <td className="py-2 px-3 font-semibold text-slate-800 dark:text-slate-200">
                           {row.banco || 'Geral'}
                         </td>
 
-                        {/* Link Gestora */}
+                        {/* Link Gestora (Col G) */}
                         <td className="py-2 px-3 text-slate-500 dark:text-slate-400 max-w-[150px] truncate font-mono text-[11px]">
                           {row.linkGestora ? (
                             <span className="truncate block" title={row.linkGestora}>{row.linkGestora}</span>
