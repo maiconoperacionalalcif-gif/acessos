@@ -29,7 +29,7 @@ import {
   ListFilter
 } from 'lucide-react';
 import { Covenant, Login, User, AccessRequest, AccessRequestCategory } from '../types';
-import { normalizeText } from '../lib/utils';
+import { normalizeText, isLoginAssociatedWithCovenant, getLoginCovenantIds } from '../lib/utils';
 
 export interface OperationalViewProps {
   covenants: Covenant[];
@@ -296,7 +296,7 @@ export default function OperationalView({
 
   // Normalize all logins for each covenant
   const getCovenantLoginsList = (cov: Covenant) => {
-    const matching = logins.filter(l => l.covenantId === cov.id);
+    const matching = logins.filter(l => isLoginAssociatedWithCovenant(l, cov.id));
     
     // If no logins linked via login table, check direct fields in Covenant
     if (matching.length === 0 && (cov.login || cov.password || cov.bank)) {
@@ -1149,9 +1149,19 @@ export default function OperationalView({
                                   
                                   {/* 1. LOGIN / USUÁRIO */}
                                   <div className="space-y-1">
-                                    <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                                      Login / Usuário
-                                    </span>
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                        Login / Usuário
+                                      </span>
+                                      {getLoginCovenantIds(loginItem).length > 1 && (
+                                        <span 
+                                          className="px-1.5 py-0.2 rounded text-[9px] font-bold uppercase bg-purple-100 dark:bg-purple-950/90 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800/50"
+                                          title={`Credencial compartilhada em ${getLoginCovenantIds(loginItem).length} convênios`}
+                                        >
+                                          Multiconvênio ({getLoginCovenantIds(loginItem).length})
+                                        </span>
+                                      )}
+                                    </div>
                                     <div className="flex items-center gap-1.5">
                                       <span className="font-mono font-bold text-sm text-slate-900 dark:text-white select-all">
                                         {loginItem.username || 'Sem usuário'}

@@ -1,5 +1,5 @@
 import { Covenant, Login } from '../types';
-import { normalizeText } from './utils';
+import { normalizeText, isLoginAssociatedWithCovenant } from './utils';
 
 export interface DuplicateCovenantGroup {
   id: string;
@@ -63,7 +63,7 @@ export function detectDuplicates(covenants: Covenant[] = [], logins: Login[] = [
       let totalLoginsForGroup = 0;
       group.forEach(c => {
         duplicateCovenantIdSet.add(c.id);
-        totalLoginsForGroup += logins.filter(l => l.covenantId === c.id).length;
+        totalLoginsForGroup += logins.filter(l => isLoginAssociatedWithCovenant(l, c.id)).length;
       });
 
       redundantCovenantsCount += (group.length - 1);

@@ -27,7 +27,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { Login, Covenant, System, User, LoginStatus } from '../types';
-import { normalizeText, matchesSearch } from '../lib/utils';
+import { normalizeText, matchesSearch, isLoginAssociatedWithCovenant, getLoginCovenantIds } from '../lib/utils';
 import * as XLSX from 'xlsx';
 
 interface LoginsProps {
@@ -75,9 +75,10 @@ export default function Logins({
     
     return logins.filter(login => {
       // Check covenant permission
+      const userCovIds = getLoginCovenantIds(login);
       const hasCovenantPermission = 
         currentUser.allowedCovenants.length === 0 || 
-        currentUser.allowedCovenants.includes(login.covenantId);
+        userCovIds.some(cid => currentUser.allowedCovenants.includes(cid));
 
       // Check bank permission
       const hasBankPermission = 
@@ -170,7 +171,7 @@ export default function Logins({
         matchesSearch(sys?.name, term)
       );
 
-      const matchCovenant = selectedCovenant === 'Todos' || login.covenantId === selectedCovenant;
+      const matchCovenant = selectedCovenant === 'Todos' || isLoginAssociatedWithCovenant(login, selectedCovenant);
       const matchSystem = selectedSystem === 'Todos' || login.systemId === selectedSystem;
       const matchStatus = selectedStatus === 'Todos' || login.status === selectedStatus;
       

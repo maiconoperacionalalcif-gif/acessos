@@ -430,9 +430,13 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
           // Skip login creation if user chose not to replace
         } else {
           const nowIso = new Date().toISOString();
+          const existingIds = existingLogin ? (existingLogin.covenantIds || [existingLogin.covenantId]).filter(Boolean) : [];
+          const mergedCovIds = Array.from(new Set([...existingIds, targetCovenantId]));
+
           const loginPayload: Login = {
             id: existingLogin ? existingLogin.id : `log-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
             covenantId: targetCovenantId,
+            covenantIds: mergedCovIds,
             systemId: systems?.[0]?.id || 'sys-1',
             url: row.linkGestora || '',
             bank: row.banco || 'Geral',

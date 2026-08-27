@@ -20,7 +20,7 @@ import {
   Key
 } from 'lucide-react';
 import { Covenant, CovenantCategory, User, Login } from '../types';
-import { normalizeText, matchesSearch } from '../lib/utils';
+import { normalizeText, matchesSearch, isLoginAssociatedWithCovenant } from '../lib/utils';
 import * as XLSX from 'xlsx';
 
 interface CovenantsProps {
@@ -94,7 +94,7 @@ export default function Covenants({
 
   // Helper to compile logins for a covenant
   const getCovenantLogins = (cov: Covenant) => {
-    const matching = logins.filter(l => l.covenantId === cov.id);
+    const matching = logins.filter(l => isLoginAssociatedWithCovenant(l, cov.id));
     if (cov.login) {
       const exists = matching.some(m => m.username?.toLowerCase() === cov.login?.toLowerCase());
       if (!exists) {

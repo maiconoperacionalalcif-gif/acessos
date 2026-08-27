@@ -45,7 +45,7 @@ import {
   CheckCircle2
 } from 'lucide-react';
 import { Covenant, CovenantCategory, Login, System, User, LoginStatus } from '../types';
-import { normalizeText, matchesSearch } from '../lib/utils';
+import { normalizeText, matchesSearch, isLoginAssociatedWithCovenant, getLoginCovenantIds } from '../lib/utils';
 import { detectDuplicates, DuplicatesReport } from '../lib/duplicateDetector';
 import * as XLSX from 'xlsx';
 import { BRAZILIAN_STATES } from './OperationalView';
@@ -137,6 +137,8 @@ export default function Accesses({
   const [isSingleLoginModalOpen, setIsSingleLoginModalOpen] = useState(false);
   const [editingSingleLogin, setEditingSingleLogin] = useState<Partial<Login> | null>(null);
   const [singleLoginCovenantId, setSingleLoginCovenantId] = useState<string>('');
+  const [singleLoginAdditionalCovenantIds, setSingleLoginAdditionalCovenantIds] = useState<string[]>([]);
+  const [covenantPickerSearch, setCovenantPickerSearch] = useState<string>('');
 
   // Bulk Excel Import Modal (Inclusão em Massa)
   const [isBulkImportModalOpen, setIsBulkImportModalOpen] = useState(false);
@@ -230,13 +232,14 @@ export default function Accesses({
 
   // Helper to compile logins for a covenant
   const getCovenantLogins = (cov: Covenant): Login[] => {
-    const matching = logins.filter(l => l.covenantId === cov.id);
+    const matching = logins.filter(l => isLoginAssociatedWithCovenant(l, cov.id));
     if (cov.login) {
       const exists = matching.some(m => m.username?.toLowerCase() === cov.login?.toLowerCase());
       if (!exists) {
         matching.unshift({
           id: `direct-${cov.id}`,
           covenantId: cov.id,
+          covenantIds: [cov.id],
           systemId: '',
           shop: '',
           username: cov.login,
@@ -374,22 +377,23 @@ export default function Accesses({
         return false;
       }
 
-      const cov = covenants.find(c => c.id === login.covenantId);
-      const covName = cov?.name || '';
-      const covState = cov?.state || '';
-      const covCategory = cov?.category || '';
+      const linkedCovIds = getLoginCovenantIds(login);
+      const linkedCovenants = covenants.filter(c => linkedCovIds.includes(c.id));
+      const covNames = linkedCovenants.map(c => c.name).join(' ');
+      const covStates = linkedCovenants.map(c => c.state).join(' ');
+      const covCategories = linkedCovenants.map(c => c.category).join(' ');
 
       const matchSearch = !term || (
         matchesSearch(login.username, term) ||
         matchesSearch(login.bank, term) ||
         matchesSearch(login.observations, term) ||
-        matchesSearch(covName, term) ||
-        matchesSearch(covState, term) ||
-        matchesSearch(covCategory, term)
+        matchesSearch(covNames, term) ||
+        matchesSearch(covStates, term) ||
+        matchesSearch(covCategories, term)
       );
 
-      const matchCategory = selectedCategory === 'Todos' || covCategory === selectedCategory;
-      const matchState = selectedState === 'Todos' || covState === selectedState;
+      const matchCategory = selectedCategory === 'Todos' || linkedCovenants.some(c => c.category === selectedCategory);
+      const matchState = selectedState === 'Todos' || linkedCovenants.some(c => c.state === selectedState);
       const matchBank = selectedBank === 'Todos' || login.bank.toLowerCase() === selectedBank.toLowerCase();
       const matchStatus = selectedStatus === 'Todos' || login.status === selectedStatus;
       const matchAvailability = 
@@ -505,27 +509,32 @@ export default function Accesses({
       for (const item of modalBankLogins) {
         if (item.username?.trim() || item.password?.trim() || item.bank?.trim()) {
           const isDirect = item.id?.startsWith('direct-');
+          const existingLogin = item.id ? logins.find(l => l.id === item.id) : null;
+          const existingIds = existingLogin ? getLoginCovenantIds(existingLogin) : [];
+          const mergedCovIds = Array.from(new Set([...existingIds, covenantData.id]));
+
           const loginData: Login = {
             id: (item.id && !isDirect) ? item.id : `log-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-            covenantId: covenantData.id,
-            systemId: '',
-            shop: '',
+            covenantId: existingLogin?.covenantId || covenantData.id,
+            covenantIds: mergedCovIds,
+            systemId: existingLogin?.systemId || '',
+            shop: existingLogin?.shop || '',
             username: item.username?.trim() || '',
             password: item.password?.trim() || '',
             bank: item.bank?.trim() || 'Banco Geral',
-            cpf: '',
-            pin: '',
-            token: '',
-            email: '',
-            phone: '',
+            cpf: existingLogin?.cpf || '',
+            pin: existingLogin?.pin || '',
+            token: existingLogin?.token || '',
+            email: existingLogin?.email || '',
+            phone: existingLogin?.phone || '',
             responsible: currentUser?.name || 'Administrador',
-            observations: item.notes?.trim() || '',
-            creationDate: new Date().toISOString().split('T')[0],
+            observations: item.notes?.trim() || existingLogin?.observations || '',
+            creationDate: existingLogin?.creationDate || new Date().toISOString().split('T')[0],
             lastAlteration: new Date().toISOString().split('T')[0],
-            expirationDate: '',
-            status: item.status || 'Ativo',
-            reservedBy: '',
-            reservedAt: ''
+            expirationDate: existingLogin?.expirationDate || '',
+            status: item.status || existingLogin?.status || 'Ativo',
+            reservedBy: existingLogin?.reservedBy || '',
+            reservedAt: existingLogin?.reservedAt || ''
           };
           await onSaveLogin(loginData);
         }
@@ -544,9 +553,12 @@ export default function Accesses({
   const openNewSingleLoginModal = (covenantId?: string) => {
     const defaultCovId = covenantId || covenants[0]?.id || '';
     setSingleLoginCovenantId(defaultCovId);
+    setSingleLoginAdditionalCovenantIds([]);
+    setCovenantPickerSearch('');
     setEditingSingleLogin({
       id: `log-${Date.now()}`,
       covenantId: defaultCovId,
+      covenantIds: [defaultCovId],
       systemId: '',
       bank: 'Itaú Consignado',
       username: '',
@@ -558,8 +570,13 @@ export default function Accesses({
   };
 
   const openEditSingleLoginModal = (login: Login) => {
-    setSingleLoginCovenantId(login.covenantId);
-    setEditingSingleLogin({ ...login });
+    const allIds = getLoginCovenantIds(login);
+    const primaryId = login.covenantId || allIds[0] || covenants[0]?.id || '';
+    const additionals = allIds.filter(id => id !== primaryId);
+    setSingleLoginCovenantId(primaryId);
+    setSingleLoginAdditionalCovenantIds(additionals);
+    setCovenantPickerSearch('');
+    setEditingSingleLogin({ ...login, covenantIds: allIds });
     setIsSingleLoginModalOpen(true);
   };
 
@@ -576,9 +593,11 @@ export default function Accesses({
     }
 
     try {
+      const allAssociatedCovIds = Array.from(new Set([singleLoginCovenantId, ...singleLoginAdditionalCovenantIds])).filter(Boolean);
       const fullLogin: Login = {
         id: editingSingleLogin.id || `log-${Date.now()}`,
-        covenantId: singleLoginCovenantId,
+        covenantId: singleLoginCovenantId || allAssociatedCovIds[0] || '',
+        covenantIds: allAssociatedCovIds,
         systemId: editingSingleLogin.systemId || '',
         shop: editingSingleLogin.shop || '',
         username: editingSingleLogin.username.trim(),
@@ -1550,7 +1569,10 @@ export default function Accesses({
                     </tr>
                   ) : (
                     paginatedLogins.map((login) => {
-                      const cov = covenants.find(c => c.id === login.covenantId);
+                      const linkedCovIds = getLoginCovenantIds(login);
+                      const linkedCovenants = covenants.filter(c => linkedCovIds.includes(c.id));
+                      const primaryCov = covenants.find(c => c.id === login.covenantId) || linkedCovenants[0];
+                      const otherCovenants = linkedCovenants.filter(c => c.id !== primaryCov?.id);
                       const isPassVisible = !!visiblePasswordsMap[login.id];
                       const isReserved = !!login.reservedBy;
                       const isSelected = selectedLoginIds.has(login.id);
@@ -1576,24 +1598,32 @@ export default function Accesses({
                             </td>
                           )}
                           {/* Covenant Name */}
-                          <td className="py-3 px-4 font-bold text-slate-900 dark:text-white max-w-[200px] truncate">
-                            <div className="flex items-center gap-1.5">
+                          <td className="py-3 px-4 font-bold text-slate-900 dark:text-white max-w-[240px]">
+                            <div className="flex items-center gap-1.5 flex-wrap">
                               <Building2 size={14} className="text-blue-500 shrink-0" />
-                              <span className="truncate">{cov?.name || 'Convênio Avulso'}</span>
+                              <span className="truncate">{primaryCov?.name || 'Convênio Avulso'}</span>
+                              {otherCovenants.length > 0 && (
+                                <span 
+                                  className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-purple-100 dark:bg-purple-950/90 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800/50 shrink-0 cursor-help"
+                                  title={`Também atende: ${otherCovenants.map(c => `${c.name} (${c.state})`).join(', ')}`}
+                                >
+                                  +{otherCovenants.length} convênio(s)
+                                </span>
+                              )}
                             </div>
                           </td>
 
                           {/* Category */}
                           <td className="py-3 px-3">
                             <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-300">
-                              {cov?.category || 'Municipal'}
+                              {primaryCov?.category || 'Municipal'}
                             </span>
                           </td>
 
                           {/* State */}
                           <td className="py-3 px-3">
                             <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
-                              {cov?.state || '-'}
+                              {primaryCov?.state || '-'}
                             </span>
                           </td>
 
@@ -1634,7 +1664,7 @@ export default function Accesses({
                             <div className="flex items-center gap-1.5">
                               <span>{isPassVisible ? login.password : '••••••••'}</span>
                               <button
-                                onClick={() => togglePasswordVisibility(login.id, `${cov?.name || ''} - ${login.bank}`)}
+                                onClick={() => togglePasswordVisibility(login.id, `${primaryCov?.name || ''} - ${login.bank}`)}
                                 className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
                                 title={isPassVisible ? "Ocultar senha" : "Ver senha"}
                               >
@@ -1701,9 +1731,9 @@ export default function Accesses({
                           {/* Actions */}
                           <td className="py-3 px-4 text-right">
                             <div className="flex items-center justify-end gap-1">
-                              {cov?.managerUrl && (
+                              {primaryCov?.managerUrl && (
                                 <a
-                                  href={cov.managerUrl.startsWith('http') ? cov.managerUrl : `https://${cov.managerUrl}`}
+                                  href={primaryCov.managerUrl.startsWith('http') ? primaryCov.managerUrl : `https://${primaryCov.managerUrl}`}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="p-1.5 text-slate-400 hover:text-blue-600 rounded-lg cursor-pointer"
@@ -2187,15 +2217,20 @@ export default function Accesses({
             </div>
 
             <form onSubmit={handleSaveSingleLogin} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
-              {/* Select Covenant */}
+              {/* Select Primary Covenant */}
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                  Convênio / Órgão <span className="text-red-500">*</span>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                  <span>Convênio Principal <span className="text-red-500">*</span></span>
+                  <span className="text-[10px] text-slate-400 font-normal">Órgão base desta credencial</span>
                 </label>
                 <select
                   required
                   value={singleLoginCovenantId}
-                  onChange={(e) => setSingleLoginCovenantId(e.target.value)}
+                  onChange={(e) => {
+                    const newPrimary = e.target.value;
+                    setSingleLoginCovenantId(newPrimary);
+                    setSingleLoginAdditionalCovenantIds(prev => prev.filter(id => id !== newPrimary));
+                  }}
                   className={`w-full px-3 py-2 rounded-xl text-xs font-semibold border outline-none cursor-pointer ${
                     darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'
                   }`}
@@ -2204,6 +2239,123 @@ export default function Accesses({
                     <option key={c.id} value={c.id}>{c.name} ({c.state})</option>
                   ))}
                 </select>
+              </div>
+
+              {/* Multi-Covenant Association Box (Solução 1: Credencial Multiconvênio) */}
+              <div className={`p-3.5 rounded-2xl border space-y-2.5 transition-all ${
+                darkMode ? 'bg-slate-850/70 border-slate-800' : 'bg-blue-50/40 border-blue-100'
+              }`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Layers size={15} className="text-purple-500" />
+                    <div>
+                      <h4 className="text-xs font-bold text-slate-900 dark:text-white">
+                        Vincular a Múltiplos Convênios (Multiconvênio)
+                      </h4>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                        Permite que este mesmo login de banco consulte outros convênios sem precisar cadastrar duplicatas.
+                      </p>
+                    </div>
+                  </div>
+                  {singleLoginAdditionalCovenantIds.length > 0 && (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300 shrink-0">
+                      +{singleLoginAdditionalCovenantIds.length} vinculado(s)
+                    </span>
+                  )}
+                </div>
+
+                {/* Quick Search for Covenants to Link */}
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="Pesquisar convênio ou estado (ex: Bahia, Salvador, RJ)..."
+                      value={covenantPickerSearch}
+                      onChange={(e) => setCovenantPickerSearch(e.target.value)}
+                      className={`w-full pl-7 pr-3 py-1.5 rounded-lg text-xs border outline-none ${
+                        darkMode ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'
+                      }`}
+                    />
+                  </div>
+                  {singleLoginAdditionalCovenantIds.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setSingleLoginAdditionalCovenantIds([])}
+                      className="text-[10px] text-slate-400 hover:text-rose-500 underline cursor-pointer whitespace-nowrap"
+                    >
+                      Limpar extras
+                    </button>
+                  )}
+                </div>
+
+                {/* Selected Covenants Tag Chips */}
+                {singleLoginAdditionalCovenantIds.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 pt-0.5">
+                    {singleLoginAdditionalCovenantIds.map(covId => {
+                      const cov = covenants.find(c => c.id === covId);
+                      if (!cov) return null;
+                      return (
+                        <span
+                          key={cov.id}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-200 border border-purple-200 dark:border-purple-800"
+                        >
+                          <span className="truncate max-w-[160px]">{cov.name} ({cov.state})</span>
+                          <button
+                            type="button"
+                            onClick={() => setSingleLoginAdditionalCovenantIds(prev => prev.filter(id => id !== cov.id))}
+                            className="hover:text-rose-600 font-bold ml-0.5 cursor-pointer text-xs"
+                          >
+                            ×
+                          </button>
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Covenant Checkbox Scroll List */}
+                <div className={`max-h-32 overflow-y-auto rounded-xl border p-2 space-y-1 ${
+                  darkMode ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200'
+                }`}>
+                  {covenants
+                    .filter(c => c.id !== singleLoginCovenantId)
+                    .filter(c => {
+                      if (!covenantPickerSearch) return true;
+                      const s = normalizeText(covenantPickerSearch);
+                      return normalizeText(c.name).includes(s) || normalizeText(c.state).includes(s) || normalizeText(c.city).includes(s);
+                    })
+                    .map(c => {
+                      const isChecked = singleLoginAdditionalCovenantIds.includes(c.id);
+                      return (
+                        <label
+                          key={c.id}
+                          className={`flex items-center justify-between p-1.5 rounded-lg text-xs cursor-pointer select-none transition-colors ${
+                            isChecked
+                              ? darkMode ? 'bg-purple-950/40 text-purple-200' : 'bg-purple-50 text-purple-900'
+                              : darkMode ? 'hover:bg-slate-800/60 text-slate-300' : 'hover:bg-slate-50 text-slate-700'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 truncate pr-2">
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => {
+                                setSingleLoginAdditionalCovenantIds(prev =>
+                                  isChecked ? prev.filter(id => id !== c.id) : [...prev, c.id]
+                                );
+                              }}
+                              className="w-3.5 h-3.5 rounded border-slate-300 text-purple-600 focus:ring-purple-500 cursor-pointer accent-purple-600"
+                            />
+                            <span className="truncate font-medium">{c.name}</span>
+                          </div>
+                          <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 shrink-0 font-mono">
+                            {c.state}
+                          </span>
+                        </label>
+                      );
+                    })}
+                </div>
               </div>
 
               {/* Bank Chips & Input */}

@@ -210,6 +210,21 @@ const MOCK_DATABASE: FullDatabase = {
       status: "Ativo"
     },
     {
+      id: "cov-govba",
+      name: "Governo do Estado da Bahia",
+      category: "Governos",
+      state: "BA",
+      city: "Salvador",
+      organ: "Secretaria da Administração do Estado da Bahia (SAEB)",
+      manager: "Portal do Servidor Bahia",
+      managerUrl: "https://www.portaldoservidor.ba.gov.br",
+      login: "saeb.itau.op",
+      password: "BaGovPass@2026",
+      bank: "Itaú",
+      observations: "Consignado estadual Bahia - servidores ativos e inativos.",
+      status: "Ativo"
+    },
+    {
       id: "cov-govrj",
       name: "Governo do Estado do Rio de Janeiro",
       category: "Governos",
@@ -589,6 +604,28 @@ const MOCK_DATABASE: FullDatabase = {
       responsible: "Tenente Silva",
       observations: "Acesso liberado pelo Bradesco para militares do Exército.",
       creationDate: "2026-01-10T10:00:00.000Z",
+      lastAlteration: "2026-07-15T14:30:00.000Z",
+      expirationDate: "2026-12-31T23:59:59.000Z",
+      status: "Ativo"
+    },
+    // Exemplo Multiconvênio (Gov. Bahia + Pref. Salvador)
+    {
+      id: "log-multi-123456",
+      covenantId: "cov-govba",
+      covenantIds: ["cov-govba", "cov-pmsa"],
+      systemId: "sys-1",
+      bank: "Banco Itaú Consignado",
+      shop: "Salvador / BA",
+      username: "123456",
+      password: "Multi@Pass2026",
+      cpf: "789.012.345-66",
+      pin: "8899",
+      token: "IT-BA-99",
+      email: "operador.ba@itau.com.br",
+      phone: "(71) 98877-6655",
+      responsible: "Maicon",
+      observations: "Credencial multiconvênio: atende Governo do Estado da Bahia e Prefeitura de Salvador simultaneamente.",
+      creationDate: "2026-02-15T10:00:00.000Z",
       lastAlteration: "2026-07-15T14:30:00.000Z",
       expirationDate: "2026-12-31T23:59:59.000Z",
       status: "Ativo"

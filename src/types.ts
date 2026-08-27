@@ -68,7 +68,8 @@ export type LoginStatus = 'Ativo' | 'Bloqueado' | 'Em manutenção';
 
 export interface Login {
   id: string;
-  covenantId: string;
+  covenantId: string; // Primary covenant ID
+  covenantIds?: string[]; // Multiple associated covenant IDs (for multi-covenant bank access)
   systemId: string;
   url?: string; // Specific portal link (e.g., https://saec.consigx.com.br/Login.aspx)
   bank: string;
