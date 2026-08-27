@@ -34,7 +34,11 @@ import {
   Sparkles,
   MapPin,
   FilePlus2,
-  ArrowRight
+  ArrowRight,
+  CheckSquare,
+  Square,
+  MinusSquare,
+  AlertTriangle
 } from 'lucide-react';
 import { Covenant, CovenantCategory, Login, System, User, LoginStatus } from '../types';
 import { normalizeText, matchesSearch } from '../lib/utils';
@@ -130,6 +134,76 @@ export default function Accesses({
   // Delete Confirmations
   const [covenantToDelete, setCovenantToDelete] = useState<Covenant | null>(null);
   const [loginToDelete, setLoginToDelete] = useState<Login | null>(null);
+
+  // Multi-Selection State (for Admin bulk operations)
+  const [selectedCovenantIds, setSelectedCovenantIds] = useState<Set<string>>(new Set());
+  const [selectedLoginIds, setSelectedLoginIds] = useState<Set<string>>(new Set());
+  const [isBulkDeleteCovenantsModalOpen, setIsBulkDeleteCovenantsModalOpen] = useState(false);
+  const [isBulkDeleteLoginsModalOpen, setIsBulkDeleteLoginsModalOpen] = useState(false);
+  const [isBatchDeleting, setIsBatchDeleting] = useState(false);
+
+  // Selection toggle helpers
+  const toggleSelectCovenant = (id: string) => {
+    setSelectedCovenantIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAllVisibleCovenants = () => {
+    const visibleIds = paginatedCovenants.map(c => c.id);
+    const allVisibleSelected = visibleIds.length > 0 && visibleIds.every(id => selectedCovenantIds.has(id));
+    setSelectedCovenantIds(prev => {
+      const next = new Set(prev);
+      if (allVisibleSelected) {
+        visibleIds.forEach(id => next.delete(id));
+      } else {
+        visibleIds.forEach(id => next.add(id));
+      }
+      return next;
+    });
+  };
+
+  const selectAllFilteredCovenants = () => {
+    setSelectedCovenantIds(new Set(sortedCovenants.map(c => c.id)));
+  };
+
+  const clearCovenantSelection = () => {
+    setSelectedCovenantIds(new Set());
+  };
+
+  const toggleSelectLogin = (id: string) => {
+    setSelectedLoginIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAllVisibleLogins = () => {
+    const visibleIds = paginatedLogins.map(l => l.id);
+    const allVisibleSelected = visibleIds.length > 0 && visibleIds.every(id => selectedLoginIds.has(id));
+    setSelectedLoginIds(prev => {
+      const next = new Set(prev);
+      if (allVisibleSelected) {
+        visibleIds.forEach(id => next.delete(id));
+      } else {
+        visibleIds.forEach(id => next.add(id));
+      }
+      return next;
+    });
+  };
+
+  const selectAllFilteredLogins = () => {
+    setSelectedLoginIds(new Set(sortedLogins.map(l => l.id)));
+  };
+
+  const clearLoginSelection = () => {
+    setSelectedLoginIds(new Set());
+  };
 
   // Quick Bank Copy Modal
   const [bankCopyModalCovenant, setBankCopyModalCovenant] = useState<Covenant | null>(null);
@@ -533,6 +607,49 @@ export default function Accesses({
     }
   };
 
+  // Bulk Delete Covenants Handler
+  const confirmBulkDeleteCovenants = async () => {
+    if (selectedCovenantIds.size === 0) return;
+    setIsBatchDeleting(true);
+    try {
+      const ids = Array.from(selectedCovenantIds);
+      for (const id of ids) {
+        await onDeleteCovenant(id);
+        // Also delete connected logins
+        const attachedLogins = logins.filter(l => l.covenantId === id);
+        for (const l of attachedLogins) {
+          await onDeleteLogin(l.id);
+        }
+      }
+      setSelectedCovenantIds(new Set());
+      setIsBulkDeleteCovenantsModalOpen(false);
+      showToast(`${ids.length} convênio(s) excluído(s) com sucesso!`);
+    } catch (err: any) {
+      alert(err.message || 'Erro ao excluir convênios selecionados.');
+    } finally {
+      setIsBatchDeleting(false);
+    }
+  };
+
+  // Bulk Delete Logins Handler
+  const confirmBulkDeleteLogins = async () => {
+    if (selectedLoginIds.size === 0) return;
+    setIsBatchDeleting(true);
+    try {
+      const ids = Array.from(selectedLoginIds);
+      for (const id of ids) {
+        await onDeleteLogin(id);
+      }
+      setSelectedLoginIds(new Set());
+      setIsBulkDeleteLoginsModalOpen(false);
+      showToast(`${ids.length} credencial(is) excluída(s) com sucesso!`);
+    } catch (err: any) {
+      alert(err.message || 'Erro ao excluir credenciais selecionadas.');
+    } finally {
+      setIsBatchDeleting(false);
+    }
+  };
+
   // Export to Excel (.xlsx)
   const handleExportExcel = () => {
     const exportRows: any[] = [];
@@ -855,6 +972,60 @@ export default function Accesses({
       {/* ========================================================================= */}
       {viewMode === 'covenants' && (
         <div className="space-y-4">
+          {/* Selection & Bulk Actions Control Bar (when canDelete) */}
+          {canDelete && sortedCovenants.length > 0 && (
+            <div className={`p-3 px-4 rounded-xl border flex flex-wrap items-center justify-between gap-3 text-xs font-semibold ${
+              darkMode ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200 shadow-2xs'
+            }`}>
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={paginatedCovenants.length > 0 && paginatedCovenants.every(c => selectedCovenantIds.has(c.id))}
+                    onChange={toggleSelectAllVisibleCovenants}
+                    className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer accent-blue-600"
+                  />
+                  <span className="text-slate-700 dark:text-slate-200">
+                    Selecionar página atual ({paginatedCovenants.length})
+                  </span>
+                </label>
+
+                {selectedCovenantIds.size > 0 && (
+                  <>
+                    <span className="text-slate-300 dark:text-slate-700">|</span>
+                    <span className="text-blue-600 dark:text-blue-400 font-bold">
+                      {selectedCovenantIds.size} selecionado(s)
+                    </span>
+                    {selectedCovenantIds.size < sortedCovenants.length && (
+                      <button
+                        onClick={selectAllFilteredCovenants}
+                        className="text-blue-600 dark:text-blue-400 underline font-bold cursor-pointer hover:opacity-80"
+                      >
+                        Selecionar todos os {sortedCovenants.length} convênios filtrados
+                      </button>
+                    )}
+                    <button
+                      onClick={clearCovenantSelection}
+                      className="text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 underline cursor-pointer"
+                    >
+                      Desmarcar todos
+                    </button>
+                  </>
+                )}
+              </div>
+
+              {selectedCovenantIds.size > 0 && (
+                <button
+                  onClick={() => setIsBulkDeleteCovenantsModalOpen(true)}
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold transition-all shadow-xs cursor-pointer ml-auto"
+                >
+                  <Trash2 size={14} />
+                  <span>Excluir Selecionados ({selectedCovenantIds.size})</span>
+                </button>
+              )}
+            </div>
+          )}
+
           {sortedCovenants.length === 0 ? (
             <div className={`p-12 text-center rounded-2xl border ${
               darkMode ? 'bg-slate-900/60 border-slate-800 text-slate-400' : 'bg-white border-slate-200 text-slate-500'
@@ -879,17 +1050,35 @@ export default function Accesses({
                 const covLogins = getCovenantLogins(cov);
                 const isSphereFederal = cov.category === 'Federal' || cov.category === 'Militar';
                 const isSphereState = cov.category === 'Estadual';
+                const isSelected = selectedCovenantIds.has(cov.id);
 
                 return (
                   <div
                     key={cov.id}
                     className={`rounded-2xl border transition-all duration-200 flex flex-col justify-between overflow-hidden group hover:shadow-md ${
-                      darkMode ? 'bg-slate-900 border-slate-800/90 text-white hover:border-slate-700' : 'bg-white border-slate-200/90 text-slate-900 shadow-2xs hover:border-slate-300'
+                      isSelected
+                        ? 'ring-2 ring-blue-500 border-blue-500 bg-blue-50/10 dark:bg-blue-950/20 shadow-md'
+                        : darkMode ? 'bg-slate-900 border-slate-800/90 text-white hover:border-slate-700' : 'bg-white border-slate-200/90 text-slate-900 shadow-2xs hover:border-slate-300'
                     }`}
                   >
                     {/* Card Header */}
-                    <div className="p-4 border-b dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-850/50">
+                    <div className={`p-4 border-b transition-colors ${
+                      isSelected 
+                        ? 'bg-blue-50/40 dark:bg-blue-950/40 border-blue-200 dark:border-blue-900' 
+                        : 'dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-850/50'
+                    }`}>
                       <div className="flex items-start justify-between gap-2">
+                        {canDelete && (
+                          <div className="pt-0.5 shrink-0">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => toggleSelectCovenant(cov.id)}
+                              className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer accent-blue-600"
+                              title="Selecionar para exclusão"
+                            />
+                          </div>
+                        )}
                         <div className="space-y-1 flex-1 min-w-0">
                           <div className="flex flex-wrap items-center gap-1.5">
                             <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase ${
@@ -1117,6 +1306,60 @@ export default function Accesses({
       {/* ========================================================================= */}
       {viewMode === 'logins' && (
         <div className="space-y-4">
+          {/* Selection & Bulk Actions Control Bar for Logins (when canDelete) */}
+          {canDelete && sortedLogins.length > 0 && (
+            <div className={`p-3 px-4 rounded-xl border flex flex-wrap items-center justify-between gap-3 text-xs font-semibold ${
+              darkMode ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200 shadow-2xs'
+            }`}>
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={paginatedLogins.length > 0 && paginatedLogins.every(l => selectedLoginIds.has(l.id))}
+                    onChange={toggleSelectAllVisibleLogins}
+                    className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer accent-blue-600"
+                  />
+                  <span className="text-slate-700 dark:text-slate-200">
+                    Selecionar página atual ({paginatedLogins.length})
+                  </span>
+                </label>
+
+                {selectedLoginIds.size > 0 && (
+                  <>
+                    <span className="text-slate-300 dark:text-slate-700">|</span>
+                    <span className="text-blue-600 dark:text-blue-400 font-bold">
+                      {selectedLoginIds.size} selecionada(s)
+                    </span>
+                    {selectedLoginIds.size < sortedLogins.length && (
+                      <button
+                        onClick={selectAllFilteredLogins}
+                        className="text-blue-600 dark:text-blue-400 underline font-bold cursor-pointer hover:opacity-80"
+                      >
+                        Selecionar todas as {sortedLogins.length} credenciais filtradas
+                      </button>
+                    )}
+                    <button
+                      onClick={clearLoginSelection}
+                      className="text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 underline cursor-pointer"
+                    >
+                      Desmarcar todas
+                    </button>
+                  </>
+                )}
+              </div>
+
+              {selectedLoginIds.size > 0 && (
+                <button
+                  onClick={() => setIsBulkDeleteLoginsModalOpen(true)}
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold transition-all shadow-xs cursor-pointer ml-auto"
+                >
+                  <Trash2 size={14} />
+                  <span>Excluir Selecionadas ({selectedLoginIds.size})</span>
+                </button>
+              )}
+            </div>
+          )}
+
           <div className={`rounded-2xl border overflow-hidden transition-all ${
             darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-xs'
           }`}>
@@ -1126,6 +1369,17 @@ export default function Accesses({
                   darkMode ? 'bg-slate-850 border-slate-800 text-slate-400' : 'bg-slate-50 border-slate-200 text-slate-600'
                 }`}>
                   <tr>
+                    {canDelete && (
+                      <th className="py-3 px-3 w-10 text-center">
+                        <input
+                          type="checkbox"
+                          checked={paginatedLogins.length > 0 && paginatedLogins.every(l => selectedLoginIds.has(l.id))}
+                          onChange={toggleSelectAllVisibleLogins}
+                          className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer accent-blue-600"
+                          title="Selecionar todos da página"
+                        />
+                      </th>
+                    )}
                     <th className="py-3 px-4">Convênio / Órgão</th>
                     <th className="py-3 px-3">Esfera</th>
                     <th className="py-3 px-3">UF</th>
@@ -1140,7 +1394,7 @@ export default function Accesses({
                 <tbody className="divide-y dark:divide-slate-800">
                   {paginatedLogins.length === 0 ? (
                     <tr>
-                      <td colSpan={9} className="py-12 text-center text-slate-400">
+                      <td colSpan={canDelete ? 10 : 9} className="py-12 text-center text-slate-400">
                         <KeyRound size={32} className="mx-auto mb-2 opacity-40 text-blue-500" />
                         <p className="font-bold text-sm">Nenhuma credencial encontrada</p>
                         <p className="text-xs text-slate-500 mt-0.5">Tente remover filtros para visualizar mais resultados.</p>
@@ -1151,14 +1405,28 @@ export default function Accesses({
                       const cov = covenants.find(c => c.id === login.covenantId);
                       const isPassVisible = !!visiblePasswordsMap[login.id];
                       const isReserved = !!login.reservedBy;
+                      const isSelected = selectedLoginIds.has(login.id);
 
                       return (
                         <tr 
                           key={login.id} 
                           className={`transition-colors ${
-                            darkMode ? 'hover:bg-slate-800/50' : 'hover:bg-slate-50/80'
+                            isSelected
+                              ? 'bg-blue-50/70 dark:bg-blue-950/40 hover:bg-blue-100/70 dark:hover:bg-blue-900/40'
+                              : darkMode ? 'hover:bg-slate-800/50' : 'hover:bg-slate-50/80'
                           }`}
                         >
+                          {canDelete && (
+                            <td className="py-3 px-3 text-center">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => toggleSelectLogin(login.id)}
+                                className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer accent-blue-600"
+                                title="Selecionar para exclusão"
+                              />
+                            </td>
+                          )}
                           {/* Covenant Name */}
                           <td className="py-3 px-4 font-bold text-slate-900 dark:text-white max-w-[200px] truncate">
                             <div className="flex items-center gap-1.5">
@@ -1975,6 +2243,176 @@ export default function Accesses({
                 Sim, Excluir Credencial
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL 5: CONFIRMAR EXCLUSÃO EM MASSA DE CONVÊNIOS */}
+      {/* ========================================================================= */}
+      {isBulkDeleteCovenantsModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
+          <div className={`w-full max-w-md rounded-2xl border p-6 shadow-2xl space-y-4 ${
+            darkMode ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-200 text-slate-900'
+          }`}>
+            <div className="w-12 h-12 rounded-2xl bg-rose-500/10 text-rose-500 flex items-center justify-center mx-auto">
+              <Trash2 size={24} />
+            </div>
+            <div className="text-center space-y-1">
+              <h3 className="font-display font-bold text-base">Excluir {selectedCovenantIds.size} Acessos / Convênios?</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Esta ação irá remover permanentemente os <strong>{selectedCovenantIds.size}</strong> convênios selecionados e todas as credenciais bancárias associadas a eles.
+              </p>
+            </div>
+
+            <div className="max-h-36 overflow-y-auto p-2.5 rounded-xl border text-xs space-y-1 dark:border-slate-800 bg-slate-50 dark:bg-slate-850">
+              {Array.from(selectedCovenantIds).slice(0, 10).map(id => {
+                const c = covenants.find(cov => cov.id === id);
+                return (
+                  <div key={id} className="flex items-center gap-1.5 text-slate-700 dark:text-slate-300 font-semibold truncate">
+                    <span className="text-rose-500">•</span>
+                    <span className="truncate">{c?.name || id} ({c?.category || 'Convênio'})</span>
+                  </div>
+                );
+              })}
+              {selectedCovenantIds.size > 10 && (
+                <p className="text-[10px] text-slate-400 font-bold pt-1 italic">
+                  ... e mais {selectedCovenantIds.size - 10} outros convênios selecionados.
+                </p>
+              )}
+            </div>
+
+            <div className="flex items-center justify-center gap-2 pt-2">
+              <button
+                disabled={isBatchDeleting}
+                onClick={() => setIsBulkDeleteCovenantsModalOpen(false)}
+                className={`px-4 py-2 border rounded-xl text-xs font-bold cursor-pointer disabled:opacity-50 ${
+                  darkMode ? 'border-slate-700 hover:bg-slate-800 text-slate-300' : 'border-slate-200 hover:bg-slate-100 text-slate-600'
+                }`}
+              >
+                Cancelar
+              </button>
+              <button
+                disabled={isBatchDeleting}
+                onClick={confirmBulkDeleteCovenants}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold shadow-md cursor-pointer transition-all disabled:opacity-50 flex items-center gap-1.5"
+              >
+                {isBatchDeleting ? (
+                  <>
+                    <RefreshCw size={14} className="animate-spin" />
+                    <span>Excluindo ({selectedCovenantIds.size})...</span>
+                  </>
+                ) : (
+                  <span>Sim, Excluir Todos Selecionados</span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL 6: CONFIRMAR EXCLUSÃO EM MASSA DE CREDENCIAIS */}
+      {/* ========================================================================= */}
+      {isBulkDeleteLoginsModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
+          <div className={`w-full max-w-md rounded-2xl border p-6 shadow-2xl space-y-4 ${
+            darkMode ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-200 text-slate-900'
+          }`}>
+            <div className="w-12 h-12 rounded-2xl bg-rose-500/10 text-rose-500 flex items-center justify-center mx-auto">
+              <Trash2 size={24} />
+            </div>
+            <div className="text-center space-y-1">
+              <h3 className="font-display font-bold text-base">Excluir {selectedLoginIds.size} Credenciais?</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Deseja realmente remover as <strong>{selectedLoginIds.size}</strong> credenciais bancárias selecionadas?
+              </p>
+            </div>
+
+            <div className="max-h-36 overflow-y-auto p-2.5 rounded-xl border text-xs space-y-1 dark:border-slate-800 bg-slate-50 dark:bg-slate-850">
+              {Array.from(selectedLoginIds).slice(0, 10).map(id => {
+                const l = logins.find(log => log.id === id);
+                const c = covenants.find(cov => cov.id === l?.covenantId);
+                return (
+                  <div key={id} className="flex items-center gap-1.5 text-slate-700 dark:text-slate-300 font-semibold truncate">
+                    <span className="text-rose-500">•</span>
+                    <span className="truncate">{c?.name || 'Convênio'} - {l?.bank || 'Banco'}: <strong>{l?.username}</strong></span>
+                  </div>
+                );
+              })}
+              {selectedLoginIds.size > 10 && (
+                <p className="text-[10px] text-slate-400 font-bold pt-1 italic">
+                  ... e mais {selectedLoginIds.size - 10} outras credenciais selecionadas.
+                </p>
+              )}
+            </div>
+
+            <div className="flex items-center justify-center gap-2 pt-2">
+              <button
+                disabled={isBatchDeleting}
+                onClick={() => setIsBulkDeleteLoginsModalOpen(false)}
+                className={`px-4 py-2 border rounded-xl text-xs font-bold cursor-pointer disabled:opacity-50 ${
+                  darkMode ? 'border-slate-700 hover:bg-slate-800 text-slate-300' : 'border-slate-200 hover:bg-slate-100 text-slate-600'
+                }`}
+              >
+                Cancelar
+              </button>
+              <button
+                disabled={isBatchDeleting}
+                onClick={confirmBulkDeleteLogins}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold shadow-md cursor-pointer transition-all disabled:opacity-50 flex items-center gap-1.5"
+              >
+                {isBatchDeleting ? (
+                  <>
+                    <RefreshCw size={14} className="animate-spin" />
+                    <span>Excluindo ({selectedLoginIds.size})...</span>
+                  </>
+                ) : (
+                  <span>Sim, Excluir Credenciais Selecionadas</span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* FLOATING BULK ACTIONS BAR (BARRA DE AÇÕES EM MASSA FLUTUANTE)              */}
+      {/* ========================================================================= */}
+      {canDelete && (
+        (viewMode === 'covenants' && selectedCovenantIds.size > 0) ||
+        (viewMode === 'logins' && selectedLoginIds.size > 0)
+      ) && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 px-5 py-3 rounded-2xl bg-slate-900 text-white dark:bg-slate-800 dark:text-white shadow-2xl border border-slate-700 dark:border-slate-600 flex items-center gap-4 animate-bounce-subtle">
+          <div className="flex items-center gap-2">
+            <span className="flex h-2.5 w-2.5 rounded-full bg-rose-500 animate-pulse" />
+            <span className="text-xs font-bold whitespace-nowrap">
+              {viewMode === 'covenants' 
+                ? `${selectedCovenantIds.size} convênio(s) selecionado(s)` 
+                : `${selectedLoginIds.size} credencial(is) selecionada(s)`}
+            </span>
+          </div>
+
+          <div className="h-4 w-px bg-slate-700 dark:bg-slate-600" />
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={viewMode === 'covenants' ? clearCovenantSelection : clearLoginSelection}
+              className="px-3 py-1.5 text-xs font-semibold text-slate-300 hover:text-white cursor-pointer hover:bg-slate-800 dark:hover:bg-slate-700 rounded-lg transition-colors"
+            >
+              Desmarcar
+            </button>
+
+            <button
+              onClick={() => {
+                if (viewMode === 'covenants') setIsBulkDeleteCovenantsModalOpen(true);
+                else setIsBulkDeleteLoginsModalOpen(true);
+              }}
+              className="flex items-center gap-1.5 px-4 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold shadow-md cursor-pointer transition-all active:scale-95 whitespace-nowrap"
+            >
+              <Trash2 size={14} />
+              <span>Excluir Selecionados</span>
+            </button>
           </div>
         </div>
       )}
