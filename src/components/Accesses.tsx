@@ -39,13 +39,18 @@ import {
   Square,
   MinusSquare,
   AlertTriangle,
-  Upload
+  Upload,
+  ShieldAlert,
+  GitMerge,
+  CheckCircle2
 } from 'lucide-react';
 import { Covenant, CovenantCategory, Login, System, User, LoginStatus } from '../types';
 import { normalizeText, matchesSearch } from '../lib/utils';
+import { detectDuplicates, DuplicatesReport } from '../lib/duplicateDetector';
 import * as XLSX from 'xlsx';
 import { BRAZILIAN_STATES } from './OperationalView';
 import { BulkImportModal } from './BulkImportModal';
+import { DuplicatesManagerModal } from './DuplicatesManagerModal';
 
 export interface AccessesProps {
   covenants: Covenant[];
@@ -135,6 +140,10 @@ export default function Accesses({
 
   // Bulk Excel Import Modal (Inclusão em Massa)
   const [isBulkImportModalOpen, setIsBulkImportModalOpen] = useState(false);
+
+  // Duplicates Auditor Modal & Filters
+  const [isDuplicatesModalOpen, setIsDuplicatesModalOpen] = useState(false);
+  const [showOnlyDuplicates, setShowOnlyDuplicates] = useState(false);
 
   // Delete Confirmations
   const [covenantToDelete, setCovenantToDelete] = useState<Covenant | null>(null);
@@ -292,10 +301,20 @@ export default function Accesses({
   const activeLogins = logins.filter(l => l.status === 'Ativo').length;
   const reservedLogins = logins.filter(l => !!l.reservedBy).length;
 
+  // Duplicates Detection Memo
+  const duplicatesReport: DuplicatesReport = useMemo(() => {
+    return detectDuplicates(covenants, logins);
+  }, [covenants, logins]);
+
   // Filtered Covenants
   const filteredCovenants = useMemo(() => {
     const term = normalizeText(searchTerm);
     return covenants.filter(cov => {
+      // If filtering only duplicates
+      if (showOnlyDuplicates && !duplicatesReport.duplicateCovenantIdSet.has(cov.id)) {
+        return false;
+      }
+
       const covLogins = getCovenantLogins(cov);
       const loginsSearchMatch = covLogins.some(l => 
         matchesSearch(l.username, term) ||
@@ -322,7 +341,7 @@ export default function Accesses({
 
       return matchSearch && matchCategory && matchStatus && matchState && matchBank;
     });
-  }, [covenants, logins, searchTerm, selectedCategory, selectedStatus, selectedState, selectedBank]);
+  }, [covenants, logins, searchTerm, selectedCategory, selectedStatus, selectedState, selectedBank, showOnlyDuplicates, duplicatesReport]);
 
   // Sorted Covenants
   const sortedCovenants = useMemo(() => {
@@ -350,6 +369,11 @@ export default function Accesses({
   const filteredLogins = useMemo(() => {
     const term = normalizeText(searchTerm);
     return logins.filter(login => {
+      // If filtering only duplicates
+      if (showOnlyDuplicates && !duplicatesReport.duplicateLoginIdSet.has(login.id)) {
+        return false;
+      }
+
       const cov = covenants.find(c => c.id === login.covenantId);
       const covName = cov?.name || '';
       const covState = cov?.state || '';
@@ -375,7 +399,7 @@ export default function Accesses({
 
       return matchSearch && matchCategory && matchState && matchBank && matchStatus && matchAvailability;
     });
-  }, [logins, covenants, searchTerm, selectedCategory, selectedState, selectedBank, selectedStatus, selectedAvailability]);
+  }, [logins, covenants, searchTerm, selectedCategory, selectedState, selectedBank, selectedStatus, selectedAvailability, showOnlyDuplicates, duplicatesReport]);
 
   // Sorted Logins
   const sortedLogins = useMemo(() => {
@@ -736,6 +760,17 @@ export default function Accesses({
 
         {/* Action Buttons */}
         <div className="flex flex-wrap items-center gap-2.5">
+          {canEdit && duplicatesReport.hasDuplicates && (
+            <button
+              onClick={() => setIsDuplicatesModalOpen(true)}
+              className="flex items-center gap-1.5 px-3.5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer animate-pulse"
+              title="Central de auditoria e resolução de duplicidades"
+            >
+              <ShieldAlert size={15} />
+              <span>Auditar Duplicados ({duplicatesReport.totalRedundantItems})</span>
+            </button>
+          )}
+
           <button
             onClick={handleExportExcel}
             className={`flex items-center gap-1.5 px-3.5 py-2.5 border rounded-xl text-xs font-semibold cursor-pointer transition-colors ${
@@ -786,6 +821,60 @@ export default function Accesses({
         </div>
       </div>
 
+      {/* Admin Duplicates Alert Banner */}
+      {canEdit && duplicatesReport.hasDuplicates && (
+        <div className={`p-4 md:p-5 rounded-2xl border flex flex-col md:flex-row md:items-center justify-between gap-4 transition-all duration-300 ${
+          darkMode 
+            ? 'bg-gradient-to-r from-amber-950/70 via-slate-900 to-rose-950/40 border-amber-800/60 text-slate-100 shadow-md' 
+            : 'bg-gradient-to-r from-amber-50 via-white to-rose-50/50 border-amber-200 text-slate-900 shadow-xs'
+        }`}>
+          <div className="flex items-start gap-3">
+            <div className="p-2.5 rounded-xl bg-amber-500 text-white shadow-xs shrink-0 mt-0.5">
+              <ShieldAlert size={22} className="animate-pulse" />
+            </div>
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm md:text-base font-display font-bold text-amber-950 dark:text-amber-200">
+                  Alerta Admin: {duplicatesReport.totalRedundantItems} item(s) duplicados detectados
+                </h2>
+                <span className="px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300 text-[10px] font-extrabold uppercase border border-amber-500/30">
+                  Auditoria de Base
+                </span>
+              </div>
+              <p className="text-xs text-slate-600 dark:text-slate-400">
+                Foram identificados <strong>{duplicatesReport.duplicateLogins.length} grupo(s) de credenciais repetidas</strong> ({duplicatesReport.redundantLoginsCount} excedentes) e <strong>{duplicatesReport.duplicateCovenants.length} convênio(s) com mesmo nome e UF</strong> ({duplicatesReport.redundantCovenantsCount} excedentes).
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+            <button
+              onClick={() => {
+                setShowOnlyDuplicates(prev => !prev);
+                setCurrentPage(1);
+              }}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                showOnlyDuplicates
+                  ? 'bg-amber-500 text-white border-amber-600 shadow-xs'
+                  : darkMode 
+                    ? 'border-amber-800/80 bg-slate-850 hover:bg-slate-800 text-amber-300' 
+                    : 'border-amber-300 bg-white hover:bg-amber-100 text-amber-900 shadow-2xs'
+              }`}
+            >
+              {showOnlyDuplicates ? '✓ Mostrando Apenas Duplicados' : 'Filtrar Duplicados na Tela'}
+            </button>
+
+            <button
+              onClick={() => setIsDuplicatesModalOpen(true)}
+              className="flex items-center gap-1.5 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer active:scale-95"
+            >
+              <Sparkles size={14} />
+              <span>Auditar e Limpar ({duplicatesReport.totalRedundantItems})</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Metrics Bar & View Mode Switcher */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         {/* Metric Badges */}
@@ -818,6 +907,25 @@ export default function Accesses({
               <Lock size={14} className="text-amber-500" />
               <span>Em Uso / Reservados: <strong>{reservedLogins}</strong></span>
             </div>
+          )}
+
+          {duplicatesReport.totalRedundantItems > 0 && (
+            <button
+              onClick={() => {
+                setShowOnlyDuplicates(prev => !prev);
+                setCurrentPage(1);
+              }}
+              className={`px-3 py-1.5 rounded-xl border flex items-center gap-2 cursor-pointer transition-all ${
+                showOnlyDuplicates
+                  ? 'bg-amber-500 text-white border-amber-600 shadow-xs font-bold'
+                  : darkMode ? 'bg-amber-950/40 border-amber-800/60 text-amber-300 hover:bg-amber-900/40' : 'bg-amber-50 border-amber-200 text-amber-900 hover:bg-amber-100 shadow-2xs'
+              }`}
+              title="Filtrar para ver apenas convênios e credenciais repetidas"
+            >
+              <ShieldAlert size={14} className="text-amber-500" />
+              <span>Duplicados: <strong>{duplicatesReport.totalRedundantItems}</strong></span>
+              {showOnlyDuplicates && <span className="text-[10px] underline">ativo</span>}
+            </button>
           )}
         </div>
 
@@ -1120,6 +1228,16 @@ export default function Accesses({
                             }`}>
                               {cov.status}
                             </span>
+                            {duplicatesReport.duplicateCovenantIdSet.has(cov.id) && (
+                              <button
+                                onClick={() => setIsDuplicatesModalOpen(true)}
+                                className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-500 hover:bg-amber-600 text-white flex items-center gap-1 cursor-pointer transition-colors shadow-2xs"
+                                title="Convênio com mesmo nome e UF duplicado no sistema. Clique para auditar."
+                              >
+                                <AlertTriangle size={10} />
+                                <span>Nome Repetido</span>
+                              </button>
+                            )}
                           </div>
 
                           <h3 className="font-display font-bold text-sm text-slate-900 dark:text-white truncate" title={cov.name}>
@@ -1198,10 +1316,22 @@ export default function Accesses({
                                 }`}
                               >
                                 <div className="flex items-center justify-between gap-1 mb-1.5">
-                                  <span className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1">
-                                    <Landmark size={12} className="text-blue-500" />
-                                    <span>{l.bank || 'Banco Geral'}</span>
-                                  </span>
+                                  <div className="flex items-center gap-1.5 min-w-0">
+                                    <span className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1 truncate">
+                                      <Landmark size={12} className="text-blue-500 shrink-0" />
+                                      <span className="truncate">{l.bank || 'Banco Geral'}</span>
+                                    </span>
+                                    {duplicatesReport.duplicateLoginIdSet.has(l.id) && (
+                                      <button
+                                        onClick={() => setIsDuplicatesModalOpen(true)}
+                                        className="px-1.5 py-0.2 rounded bg-amber-500 hover:bg-amber-600 text-white font-bold text-[9px] flex items-center gap-0.5 cursor-pointer shrink-0 transition-colors"
+                                        title="Credencial repetida no mesmo convênio e banco. Clique para auditar."
+                                      >
+                                        <AlertTriangle size={9} />
+                                        <span>Repetida</span>
+                                      </button>
+                                    )}
+                                  </div>
                                   
                                   {l.reservedBy ? (
                                     <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300">
@@ -1479,6 +1609,16 @@ export default function Accesses({
                           <td className="py-3 px-4 font-mono font-bold text-slate-900 dark:text-white">
                             <div className="flex items-center gap-1.5">
                               <span>{login.username}</span>
+                              {duplicatesReport.duplicateLoginIdSet.has(login.id) && (
+                                <button
+                                  onClick={() => setIsDuplicatesModalOpen(true)}
+                                  className="px-1.5 py-0.5 rounded bg-amber-500 hover:bg-amber-600 text-white font-bold text-[9px] flex items-center gap-0.5 cursor-pointer shrink-0 transition-colors shadow-2xs"
+                                  title="Credencial duplicada (mesmo convênio, banco e usuário). Clique para auditar."
+                                >
+                                  <AlertTriangle size={10} />
+                                  <span>Duplicada</span>
+                                </button>
+                              )}
                               <button
                                 onClick={() => handleCopyText(login.username, `u-${login.id}`, 'Usuário')}
                                 className="p-1 text-slate-400 hover:text-blue-500 cursor-pointer"
@@ -2452,6 +2592,24 @@ export default function Accesses({
         onSuccess={(stats) => {
           showToast(`Importação concluída: ${stats.covenantsCreated} convênio(s) e ${stats.loginsCreated} credencial(is) adicionados!`);
         }}
+      />
+
+      {/* ========================================================================= */}
+      {/* MODAL 8: AUDITOR E RESOLUÇÃO DE ACESSOS DUPLICADOS                       */}
+      {/* ========================================================================= */}
+      <DuplicatesManagerModal
+        isOpen={isDuplicatesModalOpen}
+        onClose={() => setIsDuplicatesModalOpen(false)}
+        report={duplicatesReport}
+        covenants={covenants}
+        logins={logins}
+        darkMode={darkMode}
+        currentUser={currentUser}
+        onSaveCovenant={onSaveCovenant}
+        onSaveLogin={onSaveLogin}
+        onDeleteCovenant={onDeleteCovenant}
+        onDeleteLogin={onDeleteLogin}
+        onLogAction={onLogAction}
       />
 
     </div>

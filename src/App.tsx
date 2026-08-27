@@ -32,6 +32,7 @@ import Settings from './components/Settings';
 import OperationalView from './components/OperationalView';
 import AccessRequestsQueue from './components/AccessRequestsQueue';
 import ErrorBoundary from './components/ErrorBoundary';
+import { detectDuplicates } from './lib/duplicateDetector';
 
 const MOCK_DATABASE: FullDatabase = {
   config: {
@@ -730,6 +731,12 @@ export default function App() {
     }
   }, [darkMode]);
 
+  // Duplicates detection report (must be at top level unconditionally)
+  const duplicatesReport = React.useMemo(() => {
+    return detectDuplicates(db?.covenants || [], db?.logins || []);
+  }, [db?.covenants, db?.logins]);
+  const duplicatesCount = duplicatesReport.totalRedundantItems;
+
   // Dynamic colors / settings mapping from configuration
   const config = db?.config || {
     companyName: 'ACESSOS ALCIF',
@@ -1283,6 +1290,7 @@ export default function App() {
           darkMode={darkMode}
           setDarkMode={setDarkMode}
           pendingRequestsCount={pendingRequestsCount}
+          duplicatesCount={duplicatesCount}
         />
       )}
 
