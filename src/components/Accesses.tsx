@@ -38,12 +38,14 @@ import {
   CheckSquare,
   Square,
   MinusSquare,
-  AlertTriangle
+  AlertTriangle,
+  Upload
 } from 'lucide-react';
 import { Covenant, CovenantCategory, Login, System, User, LoginStatus } from '../types';
 import { normalizeText, matchesSearch } from '../lib/utils';
 import * as XLSX from 'xlsx';
 import { BRAZILIAN_STATES } from './OperationalView';
+import { BulkImportModal } from './BulkImportModal';
 
 export interface AccessesProps {
   covenants: Covenant[];
@@ -130,6 +132,9 @@ export default function Accesses({
   const [isSingleLoginModalOpen, setIsSingleLoginModalOpen] = useState(false);
   const [editingSingleLogin, setEditingSingleLogin] = useState<Partial<Login> | null>(null);
   const [singleLoginCovenantId, setSingleLoginCovenantId] = useState<string>('');
+
+  // Bulk Excel Import Modal (Inclusão em Massa)
+  const [isBulkImportModalOpen, setIsBulkImportModalOpen] = useState(false);
 
   // Delete Confirmations
   const [covenantToDelete, setCovenantToDelete] = useState<Covenant | null>(null);
@@ -744,6 +749,19 @@ export default function Accesses({
 
           {canEdit && (
             <>
+              <button
+                onClick={() => setIsBulkImportModalOpen(true)}
+                className={`flex items-center gap-1.5 px-3.5 py-2.5 border rounded-xl text-xs font-bold cursor-pointer transition-all shadow-2xs ${
+                  darkMode 
+                    ? 'border-emerald-800/80 bg-emerald-950/40 text-emerald-300 hover:bg-emerald-900/50' 
+                    : 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                }`}
+                title="Inclusão e importação de acessos em massa via planilha Excel"
+              >
+                <Upload size={14} className="text-emerald-600 dark:text-emerald-400" />
+                <span>+ Inclusão em Massa (Excel)</span>
+              </button>
+
               <button
                 onClick={() => openNewSingleLoginModal()}
                 className={`flex items-center gap-1.5 px-3.5 py-2.5 border rounded-xl text-xs font-bold cursor-pointer transition-colors ${
@@ -2416,6 +2434,25 @@ export default function Accesses({
           </div>
         </div>
       )}
+
+      {/* ========================================================================= */}
+      {/* MODAL 7: INCLUSÃO EM MASSA VIA EXCEL (.XLSX)                             */}
+      {/* ========================================================================= */}
+      <BulkImportModal
+        isOpen={isBulkImportModalOpen}
+        onClose={() => setIsBulkImportModalOpen(false)}
+        covenants={covenants}
+        logins={logins}
+        systems={systems}
+        currentUser={currentUser}
+        darkMode={darkMode}
+        onSaveCovenant={onSaveCovenant}
+        onSaveLogin={onSaveLogin}
+        onLogAction={onLogAction}
+        onSuccess={(stats) => {
+          showToast(`Importação concluída: ${stats.covenantsCreated} convênio(s) e ${stats.loginsCreated} credencial(is) adicionados!`);
+        }}
+      />
 
     </div>
   );
