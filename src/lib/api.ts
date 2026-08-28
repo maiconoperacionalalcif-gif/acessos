@@ -1,6 +1,8 @@
 import { Covenant, System, Login, User, HistoryLog, SystemConfig, LoginReservationLog, AccessRequest } from '../types';
 import { transformGoogleSheetsUrl, parseCSV, syncCsvRowsToDatabase } from './sheetsSync';
 import { synchronizePasswordAcrossSameLoginAndBank } from './utils';
+import { db as firestoreDb } from './firebase';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 export interface FullDatabase {
   config: SystemConfig;
@@ -14,8 +16,39 @@ export interface FullDatabase {
   historyLogs: HistoryLog[];
 }
 
-// Fetch database
+const FIRESTORE_DOC_PATH = {
+  collection: 'system_database',
+  docId: 'main'
+};
+
+// Helper to save entire DB state to Firestore
+async function persistToFirestore(data: FullDatabase): Promise<void> {
+  try {
+    const docRef = doc(firestoreDb, FIRESTORE_DOC_PATH.collection, FIRESTORE_DOC_PATH.docId);
+    await setDoc(docRef, data, { merge: true });
+  } catch (err) {
+    console.warn('Falha ao persistir no Firestore:', err);
+  }
+}
+
+// Fetch database with Firestore Cloud Priority
 export async function fetchDatabase(): Promise<FullDatabase> {
+  // 1. Try Firestore First (Cloud Persistent)
+  try {
+    const docRef = doc(firestoreDb, FIRESTORE_DOC_PATH.collection, FIRESTORE_DOC_PATH.docId);
+    const snap = await getDoc(docRef);
+    if (snap.exists()) {
+      const cloudData = snap.data() as FullDatabase;
+      if (cloudData && Array.isArray(cloudData.users) && cloudData.users.length > 0) {
+        localStorage.setItem('access_manager_db', JSON.stringify(cloudData));
+        return cloudData;
+      }
+    }
+  } catch (firestoreErr) {
+    console.warn('Firestore indisponível, buscando do backend/local:', firestoreErr);
+  }
+
+  // 2. Try Server API
   try {
     const response = await fetch('/api/data');
     const contentType = response.headers.get('content-type') || '';
@@ -23,6 +56,8 @@ export async function fetchDatabase(): Promise<FullDatabase> {
       const result = await response.json();
       if (result.success && result.database) {
         localStorage.setItem('access_manager_db', JSON.stringify(result.database));
+        // Seed Firestore if it was empty
+        persistToFirestore(result.database).catch(() => {});
         return result.database;
       }
     }
@@ -30,128 +65,147 @@ export async function fetchDatabase(): Promise<FullDatabase> {
     console.warn('API de dados indisponível, buscando do cache local:', err);
   }
 
+  // 3. Try LocalStorage Cache
   const cached = localStorage.getItem('access_manager_db');
   if (cached) {
     try {
-      return JSON.parse(cached);
+      const localData = JSON.parse(cached);
+      persistToFirestore(localData).catch(() => {});
+      return localData;
     } catch (e) {
       // ignore
     }
   }
 
-  throw new Error('Falha ao buscar dados do servidor');
+  throw new Error('Falha ao buscar dados do servidor e da nuvem.');
 }
 
 // Save Config
 export async function saveSystemConfig(config: Partial<SystemConfig>): Promise<FullDatabase> {
-  const response = await fetch('/api/config', {
+  const currentDb = await fetchDatabase().catch(() => null);
+  let updatedDb: FullDatabase;
+  if (currentDb) {
+    updatedDb = {
+      ...currentDb,
+      config: { ...currentDb.config, ...config }
+    };
+  } else {
+    throw new Error('Banco de dados indisponível para atualizar configuração.');
+  }
+
+  localStorage.setItem('access_manager_db', JSON.stringify(updatedDb));
+  await persistToFirestore(updatedDb);
+
+  // Sync with Express backend
+  fetch('/api/config', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(config),
-  });
-  const result = await response.json();
-  if (result.success && result.database) return result.database;
-  throw new Error(result.error || 'Erro ao salvar configuração');
+  }).catch(() => {});
+
+  return updatedDb;
 }
 
 // Save Covenant, System, Login, User, AccessRequest
 export async function saveEntity(table: 'covenants' | 'systems' | 'logins' | 'users' | 'accessRequests', item: any): Promise<FullDatabase> {
-  try {
-    const response = await fetch('/api/save', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ table, item }),
-    });
-    const contentType = response.headers.get('content-type') || '';
-    if (response.ok && contentType.includes('application/json')) {
-      const result = await response.json();
-      if (result.success && result.database) {
-        localStorage.setItem('access_manager_db', JSON.stringify(result.database));
-        return result.database;
-      }
-    }
-  } catch (err) {
-    console.warn(`Erro ao salvar ${table} no backend, salvando no cache local:`, err);
+  const currentDb = await fetchDatabase().catch(() => {
+    const cached = localStorage.getItem('access_manager_db');
+    return cached ? JSON.parse(cached) : null;
+  });
+
+  if (!currentDb || !currentDb[table]) {
+    throw new Error(`Tabela ${table} não encontrada no banco de dados.`);
   }
 
-  // LocalStorage fallback
-  const cached = localStorage.getItem('access_manager_db');
-  let currentDb: FullDatabase | null = null;
-  if (cached) {
-    try { currentDb = JSON.parse(cached); } catch (e) {}
-  }
-  if (currentDb && currentDb[table]) {
-    const arr = currentDb[table] as any[];
-    const idx = arr.findIndex((x: any) => x.id === item.id);
-    if (idx > -1) {
-      arr[idx] = { ...arr[idx], ...item };
-    } else {
-      arr.push(item);
-    }
-
-    // Synchronize passwords across all logins and covenants that share the same username and bank
-    if (table === 'logins' && item.username && item.bank && item.password !== undefined) {
-      const syncResult = synchronizePasswordAcrossSameLoginAndBank(item, currentDb.logins || [], currentDb.covenants || []);
-      currentDb.logins = syncResult.updatedLogins;
-      currentDb.covenants = syncResult.updatedCovenants;
-    } else if (table === 'covenants' && item.login && item.bank && item.password !== undefined) {
-      const syncResult = synchronizePasswordAcrossSameLoginAndBank({ username: item.login, bank: item.bank, password: item.password }, currentDb.logins || [], currentDb.covenants || []);
-      currentDb.logins = syncResult.updatedLogins;
-      currentDb.covenants = syncResult.updatedCovenants;
-    }
-
-    localStorage.setItem('access_manager_db', JSON.stringify(currentDb));
-    return currentDb;
+  const arr = [...(currentDb[table] as any[])];
+  const idx = arr.findIndex((x: any) => x.id === item.id);
+  if (idx > -1) {
+    arr[idx] = { ...arr[idx], ...item };
+  } else {
+    arr.push(item);
   }
 
-  throw new Error(`Erro ao salvar item na tabela ${table}`);
+  let updatedDb: FullDatabase = {
+    ...currentDb,
+    [table]: arr
+  };
+
+  // Synchronize passwords across all logins and covenants that share the same username and bank
+  if (table === 'logins' && item.username && item.bank && item.password !== undefined) {
+    const syncResult = synchronizePasswordAcrossSameLoginAndBank(item, updatedDb.logins || [], updatedDb.covenants || []);
+    updatedDb.logins = syncResult.updatedLogins;
+    updatedDb.covenants = syncResult.updatedCovenants;
+  } else if (table === 'covenants' && item.login && item.bank && item.password !== undefined) {
+    const syncResult = synchronizePasswordAcrossSameLoginAndBank({ username: item.login, bank: item.bank, password: item.password }, updatedDb.logins || [], updatedDb.covenants || []);
+    updatedDb.logins = syncResult.updatedLogins;
+    updatedDb.covenants = syncResult.updatedCovenants;
+  }
+
+  localStorage.setItem('access_manager_db', JSON.stringify(updatedDb));
+  await persistToFirestore(updatedDb);
+
+  // Background sync with Express backend
+  fetch('/api/save', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ table, item }),
+  }).catch(() => {});
+
+  return updatedDb;
 }
 
 // Delete Entity
 export async function deleteEntity(table: 'covenants' | 'systems' | 'logins' | 'users' | 'accessRequests', id: string): Promise<FullDatabase> {
-  try {
-    const response = await fetch('/api/delete', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ table, id }),
-    });
-    const contentType = response.headers.get('content-type') || '';
-    if (response.ok && contentType.includes('application/json')) {
-      const result = await response.json();
-      if (result.success && result.database) {
-        localStorage.setItem('access_manager_db', JSON.stringify(result.database));
-        return result.database;
-      }
-    }
-  } catch (err) {
-    console.warn(`Erro ao deletar ${table} no backend, excluindo do cache local:`, err);
+  const currentDb = await fetchDatabase().catch(() => {
+    const cached = localStorage.getItem('access_manager_db');
+    return cached ? JSON.parse(cached) : null;
+  });
+
+  if (!currentDb || !currentDb[table]) {
+    throw new Error(`Tabela ${table} não encontrada.`);
   }
 
-  // LocalStorage fallback
-  const cached = localStorage.getItem('access_manager_db');
-  let currentDb: FullDatabase | null = null;
-  if (cached) {
-    try { currentDb = JSON.parse(cached); } catch (e) {}
-  }
-  if (currentDb && currentDb[table]) {
-    currentDb[table] = (currentDb[table] as any[]).filter((x: any) => x.id !== id) as any;
-    localStorage.setItem('access_manager_db', JSON.stringify(currentDb));
-    return currentDb;
-  }
+  const updatedDb: FullDatabase = {
+    ...currentDb,
+    [table]: (currentDb[table] as any[]).filter((x: any) => x.id !== id)
+  };
 
-  throw new Error(`Erro ao deletar item da tabela ${table}`);
+  localStorage.setItem('access_manager_db', JSON.stringify(updatedDb));
+  await persistToFirestore(updatedDb);
+
+  // Background sync with Express backend
+  fetch('/api/delete', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ table, id }),
+  }).catch(() => {});
+
+  return updatedDb;
 }
 
 // Toggle Favorite
 export async function toggleFavorite(systemId: string, userId: string): Promise<FullDatabase> {
-  const response = await fetch('/api/favorite', {
+  const currentDb = await fetchDatabase();
+  const favorites = [...(currentDb.favorites || [])];
+  const existingIndex = favorites.findIndex(x => x.systemId === systemId && x.userId === userId);
+  
+  if (existingIndex > -1) {
+    favorites.splice(existingIndex, 1);
+  } else {
+    favorites.push({ systemId, userId });
+  }
+
+  const updatedDb = { ...currentDb, favorites };
+  localStorage.setItem('access_manager_db', JSON.stringify(updatedDb));
+  await persistToFirestore(updatedDb);
+
+  fetch('/api/favorite', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ systemId, userId }),
-  });
-  const result = await response.json();
-  if (result.success && result.database) return result.database;
-  throw new Error(result.error || 'Erro ao favoritar');
+  }).catch(() => {});
+
+  return updatedDb;
 }
 
 // Add History Log
@@ -160,50 +214,136 @@ export async function addHistoryLog(log: Omit<HistoryLog, 'id'>): Promise<FullDa
     ...log,
     id: `hist-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
   };
-  const response = await fetch('/api/log', {
+
+  const currentDb = await fetchDatabase().catch(() => {
+    const cached = localStorage.getItem('access_manager_db');
+    return cached ? JSON.parse(cached) : null;
+  });
+
+  if (currentDb) {
+    const historyLogs = [logWithId, ...(currentDb.historyLogs || [])].slice(0, 500);
+    const updatedDb = { ...currentDb, historyLogs };
+    localStorage.setItem('access_manager_db', JSON.stringify(updatedDb));
+    persistToFirestore(updatedDb).catch(() => {});
+  }
+
+  fetch('/api/log', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(logWithId),
-  });
-  const result = await response.json();
-  if (result.success && result.database) return result.database;
-  throw new Error(result.error || 'Erro ao registrar histórico');
+  }).catch(() => {});
+
+  return currentDb || ({} as any);
 }
 
 // Reserve Login
 export async function reserveLogin(loginId: string, username: string, timestamp: string): Promise<FullDatabase> {
-  const response = await fetch('/api/reserve', {
+  const currentDb = await fetchDatabase();
+  let targetLogin: Login | undefined;
+  const logins = (currentDb.logins || []).map(l => {
+    if (l.id === loginId) {
+      targetLogin = l;
+      return { ...l, reservedBy: username, reservedAt: timestamp };
+    }
+    return l;
+  });
+
+  const reservationLog: LoginReservationLog = {
+    id: `res-${Date.now()}`,
+    loginId,
+    loginUser: targetLogin?.username || 'N/A',
+    systemName: targetLogin?.bank || 'Sistema',
+    reservedBy: username,
+    reservedAt: timestamp
+  };
+
+  const reservationLogs: LoginReservationLog[] = [
+    reservationLog,
+    ...(currentDb.reservationLogs || [])
+  ].slice(0, 500);
+
+  const updatedDb: FullDatabase = { ...currentDb, logins, reservationLogs };
+  localStorage.setItem('access_manager_db', JSON.stringify(updatedDb));
+  await persistToFirestore(updatedDb);
+
+  fetch('/api/reserve', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ loginId, username, timestamp }),
-  });
-  const result = await response.json();
-  if (result.success && result.database) return result.database;
-  throw new Error(result.error || 'Erro ao reservar login');
+  }).catch(() => {});
+
+  return updatedDb;
 }
 
 // Release Login
 export async function releaseLogin(loginId: string, timestamp: string): Promise<FullDatabase> {
-  const response = await fetch('/api/release', {
+  const currentDb = await fetchDatabase();
+  let reservedBy = '';
+  let targetLogin: Login | undefined;
+  const logins = (currentDb.logins || []).map(l => {
+    if (l.id === loginId) {
+      targetLogin = l;
+      reservedBy = l.reservedBy || '';
+      return { ...l, reservedBy: undefined, reservedAt: undefined };
+    }
+    return l;
+  });
+
+  const reservationLog: LoginReservationLog = {
+    id: `res-${Date.now()}`,
+    loginId,
+    loginUser: targetLogin?.username || 'N/A',
+    systemName: targetLogin?.bank || 'Sistema',
+    reservedBy: reservedBy || 'Sistema',
+    reservedAt: targetLogin?.reservedAt || timestamp,
+    releasedAt: timestamp
+  };
+
+  const reservationLogs: LoginReservationLog[] = [
+    reservationLog,
+    ...(currentDb.reservationLogs || [])
+  ].slice(0, 500);
+
+  const updatedDb: FullDatabase = { ...currentDb, logins, reservationLogs };
+  localStorage.setItem('access_manager_db', JSON.stringify(updatedDb));
+  await persistToFirestore(updatedDb);
+
+  fetch('/api/release', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ loginId, timestamp }),
-  });
-  const result = await response.json();
-  if (result.success && result.database) return result.database;
-  throw new Error(result.error || 'Erro ao liberar login');
+  }).catch(() => {});
+
+  return updatedDb;
 }
 
 // Import Logins
 export async function importLogins(logins: Login[], logs: HistoryLog[]): Promise<FullDatabase> {
-  const response = await fetch('/api/import', {
+  const currentDb = await fetchDatabase();
+  const currentLogins = [...(currentDb.logins || [])];
+
+  for (const imported of logins) {
+    const idx = currentLogins.findIndex(l => l.id === imported.id);
+    if (idx > -1) {
+      currentLogins[idx] = { ...currentLogins[idx], ...imported };
+    } else {
+      currentLogins.push(imported);
+    }
+  }
+
+  const historyLogs = [...(logs || []), ...(currentDb.historyLogs || [])].slice(0, 500);
+  const updatedDb = { ...currentDb, logins: currentLogins, historyLogs };
+  
+  localStorage.setItem('access_manager_db', JSON.stringify(updatedDb));
+  await persistToFirestore(updatedDb);
+
+  fetch('/api/import', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ logins, logs }),
-  });
-  const result = await response.json();
-  if (result.success && result.database) return result.database;
-  throw new Error(result.error || 'Erro ao importar logins');
+  }).catch(() => {});
+
+  return updatedDb;
 }
 
 // Sync Google Sheets
@@ -211,32 +351,6 @@ export async function syncGoogleSheets(
   url?: string,
   currentDb?: FullDatabase
 ): Promise<{ success: boolean; database: FullDatabase; stats: { covenantsCreated: number; loginsCreated: number; loginsUpdated: number; totalProcessed: number } }> {
-  // Try server API first
-  try {
-    const response = await fetch('/api/sync-google-sheets', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url }),
-    });
-
-    const contentType = response.headers.get('content-type') || '';
-    if (response.ok && contentType.includes('application/json')) {
-      const result = await response.json();
-      if (result.success && result.database) {
-        localStorage.setItem('access_manager_db', JSON.stringify(result.database));
-        return result;
-      }
-      if (result.error) {
-        throw new Error(result.error);
-      }
-    }
-  } catch (err: any) {
-    if (err.message && !err.message.includes('JSON') && !err.message.includes('fetch') && !err.message.includes('HTML') && !err.message.includes('Unexpected token')) {
-      throw err;
-    }
-    console.warn('API backend indisponível ou retornou HTML, executando sincronização direta pelo cliente:', err);
-  }
-
   // Client-side Direct Google Sheets Sync
   const csvUrl = transformGoogleSheetsUrl(url || '');
   const res = await fetch(csvUrl);
@@ -259,6 +373,9 @@ export async function syncGoogleSheets(
   // Base DB fallback
   let baseDb = currentDb;
   if (!baseDb) {
+    baseDb = await fetchDatabase().catch(() => null);
+  }
+  if (!baseDb) {
     const cached = localStorage.getItem('access_manager_db');
     if (cached) {
       try { baseDb = JSON.parse(cached); } catch (e) {}
@@ -273,6 +390,14 @@ export async function syncGoogleSheets(
 
   const { updatedDb, stats } = syncCsvRowsToDatabase(baseDb, rows);
   localStorage.setItem('access_manager_db', JSON.stringify(updatedDb));
+  await persistToFirestore(updatedDb);
+
+  // Background notification to server
+  fetch('/api/sync-google-sheets', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url }),
+  }).catch(() => {});
 
   return {
     success: true,

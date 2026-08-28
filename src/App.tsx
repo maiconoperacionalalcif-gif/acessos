@@ -17,8 +17,9 @@ import {
 } from 'lucide-react';
 import { api, FullDatabase } from './lib/api';
 import { User, Covenant, System, Login, HistoryLog, SystemConfig } from './types';
-import { auth } from './lib/firebase';
+import { auth, db as firestoreDb } from './lib/firebase';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
+import { doc, onSnapshot } from 'firebase/firestore';
 
 // Import all tabs
 import Navigation from './components/Navigation';
@@ -740,6 +741,58 @@ export default function App() {
     }
   }, []);
 
+  // Listen to Firestore real-time changes
+  useEffect(() => {
+    try {
+      const docRef = doc(firestoreDb, 'system_database', 'main');
+      const unsubscribe = onSnapshot(docRef, (snapshot) => {
+        if (snapshot.exists()) {
+          const cloudData = snapshot.data() as FullDatabase;
+          if (cloudData && Array.isArray(cloudData.users) && cloudData.users.length > 0) {
+            setDb(cloudData);
+            localStorage.setItem('access_manager_db', JSON.stringify(cloudData));
+          }
+        }
+      }, (err) => {
+        console.warn('Firestore realtime listener error:', err);
+      });
+      return () => unsubscribe();
+    } catch (e) {
+      console.warn('Could not establish Firestore listener:', e);
+    }
+  }, []);
+
+  // Restore persisted session from localStorage
+  useEffect(() => {
+    const savedUserStr = localStorage.getItem('access_manager_session_user');
+    if (savedUserStr) {
+      try {
+        const savedUser = JSON.parse(savedUserStr);
+        if (savedUser && savedUser.id) {
+          setCurrentUser(savedUser);
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+  }, []);
+
+  // Sync currentUser with latest database user info
+  useEffect(() => {
+    if (currentUser && db?.users) {
+      const latest = db.users.find(u => u.id === currentUser.id);
+      if (latest) {
+        if (latest.status === 'Bloqueado') {
+          handleLogout();
+          setLoginError('Sua conta foi bloqueada pelo Administrador.');
+        } else {
+          setCurrentUser(latest);
+          localStorage.setItem('access_manager_session_user', JSON.stringify(latest));
+        }
+      }
+    }
+  }, [db?.users]);
+
   // Listen to Firebase Auth state changes for persistent login
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
@@ -749,6 +802,7 @@ export default function App() {
         const matchedUser = databaseUsers.find(u => u.username.toLowerCase() === username);
         if (matchedUser && matchedUser.status !== 'Bloqueado') {
           setCurrentUser(matchedUser);
+          localStorage.setItem('access_manager_session_user', JSON.stringify(matchedUser));
         }
       }
     });
@@ -866,6 +920,7 @@ export default function App() {
       // Firebase auth error, fallback to database user state
     }
 
+    localStorage.setItem('access_manager_session_user', JSON.stringify(dbUser));
     setCurrentUser(dbUser);
     setCurrentTab('operational');
     setLoginError('');
@@ -916,6 +971,7 @@ export default function App() {
       // Ignore
     }
 
+    localStorage.setItem('access_manager_session_user', JSON.stringify(dbUser));
     setCurrentUser(dbUser);
     setCurrentTab('operational');
     setLoginError('');
@@ -928,6 +984,7 @@ export default function App() {
     } catch (err) {
       console.error('Erro ao realizar logout:', err);
     }
+    localStorage.removeItem('access_manager_session_user');
     setCurrentUser(null);
     setCurrentTab('operational');
   };
