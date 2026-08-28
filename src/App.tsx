@@ -33,6 +33,7 @@ import OperationalView from './components/OperationalView';
 import AccessRequestsQueue from './components/AccessRequestsQueue';
 import ErrorBoundary from './components/ErrorBoundary';
 import { detectDuplicates } from './lib/duplicateDetector';
+import { synchronizePasswordAcrossSameLoginAndBank } from './lib/utils';
 
 const MOCK_DATABASE: FullDatabase = {
   config: {
@@ -952,6 +953,24 @@ export default function App() {
                          table === 'users' ? 'User' : 'AccessRequest';
 
       let updatedDb = await api.saveItem(table, item);
+
+      // Synchronize passwords across all logins and covenants that share the same username and bank
+      if (table === 'logins' && item.username && item.bank && item.password !== undefined) {
+        const syncResult = synchronizePasswordAcrossSameLoginAndBank(item, updatedDb.logins || [], updatedDb.covenants || []);
+        updatedDb = {
+          ...updatedDb,
+          logins: syncResult.updatedLogins,
+          covenants: syncResult.updatedCovenants
+        };
+      } else if (table === 'covenants' && item.login && item.bank && item.password !== undefined) {
+        const syncResult = synchronizePasswordAcrossSameLoginAndBank({ username: item.login, bank: item.bank, password: item.password }, updatedDb.logins || [], updatedDb.covenants || []);
+        updatedDb = {
+          ...updatedDb,
+          logins: syncResult.updatedLogins,
+          covenants: syncResult.updatedCovenants
+        };
+      }
+
       setDb(updatedDb);
 
       // If a covenant was saved with login, password or bank, ensure a matching login is present
@@ -1239,46 +1258,14 @@ export default function App() {
             </div>
           )}
 
-          {/* Demo One-Click Access Badges */}
-          <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2.5 text-center">Selecione o tipo de acesso:</p>
-            <div className="grid grid-cols-2 gap-2.5">
-              <button
-                type="button"
-                onClick={() => handleQuickLogin('Administrador')}
-                className="p-3 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/60 rounded-xl text-left hover:border-blue-400 hover:shadow-md transition-all cursor-pointer group"
-              >
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-black text-blue-700 dark:text-blue-300">ADMIN</span>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-200 dark:bg-blue-900 text-blue-800 dark:text-blue-200 font-bold">Total</span>
-                </div>
-                <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-tight">Cadastros, ajustes, exclusões e controle total.</p>
-                <span className="text-[9px] font-mono text-blue-600 dark:text-blue-400 mt-1 block">admin / admin</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleQuickLogin('Operacional')}
-                className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 rounded-xl text-left hover:border-emerald-400 hover:shadow-md transition-all cursor-pointer group"
-              >
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-black text-emerald-700 dark:text-emerald-300">OPERACIONAL</span>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-200 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200 font-bold">Acesso</span>
-                </div>
-                <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-tight">Busca simples, estados e lista de logins por banco.</p>
-                <span className="text-[9px] font-mono text-emerald-600 dark:text-emerald-400 mt-1 block">operacional / operacional</span>
-              </button>
-            </div>
-          </div>
-
           {/* Login Form */}
-          <form onSubmit={handleLoginSubmit} className="space-y-4">
+          <form onSubmit={handleLoginSubmit} className="space-y-4 pt-2">
             <div>
               <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Usuário / Login</label>
               <input
                 type="text"
                 required
-                placeholder="Ex: admin ou operacional"
+                placeholder="Insira seu usuário"
                 value={usernameInput}
                 onChange={(e) => setUsernameInput(e.target.value)}
                 className="w-full px-4 py-2.5 border rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none bg-slate-50/50 dark:bg-slate-800/50 dark:border-slate-700 text-slate-900 dark:text-white"

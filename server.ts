@@ -4,6 +4,7 @@ import { createServer as createViteServer } from "vite";
 import fs from "fs";
 import { FullDatabase } from "./src/lib/api";
 import { transformGoogleSheetsUrl, parseCSV, syncCsvRowsToDatabase } from "./src/lib/sheetsSync";
+import { normalizeText, isSameLoginAndBank, synchronizePasswordAcrossSameLoginAndBank } from "./src/lib/utils";
 
 // In-Memory Spreadsheet Simulation (Database)
 let dataBase: FullDatabase = {
@@ -1241,6 +1242,18 @@ async function startServer() {
         } else {
           dbTable.push(item);
         }
+
+        // Synchronize passwords across all logins and covenants that share the same username and bank
+        if (table === 'logins' && item.username && item.bank && item.password !== undefined) {
+          const syncResult = synchronizePasswordAcrossSameLoginAndBank(item, dataBase.logins, dataBase.covenants);
+          dataBase.logins = syncResult.updatedLogins;
+          dataBase.covenants = syncResult.updatedCovenants;
+        } else if (table === 'covenants' && item.login && item.bank && item.password !== undefined) {
+          const syncResult = synchronizePasswordAcrossSameLoginAndBank({ username: item.login, bank: item.bank, password: item.password }, dataBase.logins, dataBase.covenants);
+          dataBase.logins = syncResult.updatedLogins;
+          dataBase.covenants = syncResult.updatedCovenants;
+        }
+
         return { success: true, database: dataBase };
       }
       return { success: false, error: "Tabela não encontrada" };
@@ -1254,6 +1267,17 @@ async function startServer() {
         dbTable[existingIndex] = { ...dbTable[existingIndex], ...item };
       } else {
         dbTable.push(item);
+      }
+
+      // Synchronize passwords across all logins and covenants that share the same username and bank
+      if (table === 'logins' && item.username && item.bank && item.password !== undefined) {
+        const syncResult = synchronizePasswordAcrossSameLoginAndBank(item, dataBase.logins, dataBase.covenants);
+        dataBase.logins = syncResult.updatedLogins;
+        dataBase.covenants = syncResult.updatedCovenants;
+      } else if (table === 'covenants' && item.login && item.bank && item.password !== undefined) {
+        const syncResult = synchronizePasswordAcrossSameLoginAndBank({ username: item.login, bank: item.bank, password: item.password }, dataBase.logins, dataBase.covenants);
+        dataBase.logins = syncResult.updatedLogins;
+        dataBase.covenants = syncResult.updatedCovenants;
       }
     }
 

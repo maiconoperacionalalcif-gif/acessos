@@ -27,7 +27,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { Login, Covenant, System, User, LoginStatus } from '../types';
-import { normalizeText, matchesSearch, isLoginAssociatedWithCovenant, getLoginCovenantIds } from '../lib/utils';
+import { normalizeText, matchesSearch, isLoginAssociatedWithCovenant, getLoginCovenantIds, isSameLoginAndBank, findMatchingBankLogins } from '../lib/utils';
 import * as XLSX from 'xlsx';
 
 interface LoginsProps {
@@ -571,7 +571,7 @@ export default function Logins({
                     {visibleColumns.username && (
                       <td className="py-3.5 px-4 font-mono font-medium">
                         <div className="space-y-1.5 min-w-[200px]">
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex items-center gap-1.5 flex-wrap">
                             <span className="text-sm font-semibold font-sans text-slate-900 dark:text-white truncate">
                               {login.username}
                             </span>
@@ -582,6 +582,21 @@ export default function Logins({
                             >
                               {copiedStates[`${login.id}-user`] ? <Check size={12} className="text-emerald-500" /> : <Copy size={11} />}
                             </button>
+                            {(() => {
+                              const sharedMatches = findMatchingBankLogins(login, logins);
+                              if (sharedMatches.length > 1) {
+                                return (
+                                  <span
+                                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 shrink-0"
+                                    title={`Login compartilhado no ${login.bank} em ${sharedMatches.length} convênios. A alteração de senha é sincronizada automaticamente em todos.`}
+                                  >
+                                    <RefreshCw size={9} className="text-blue-500" />
+                                    <span>Sincronizado ({sharedMatches.length} convênios)</span>
+                                  </span>
+                                );
+                              }
+                              return null;
+                            })()}
                           </div>
                           
                           {/* Secure Password field */}
@@ -1125,6 +1140,35 @@ export default function Logins({
                   }`}
                 />
               </div>
+
+              {/* Shared Login & Auto-Sync Notification */}
+              {(() => {
+                const matchingShared = findMatchingBankLogins(editingLogin, logins).filter(x => x.id !== editingLogin.id);
+                if (matchingShared.length > 0) {
+                  return (
+                    <div className="p-3 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 rounded-xl text-xs space-y-1.5 animate-fade-in">
+                      <div className="flex items-center gap-1.5 font-bold text-blue-700 dark:text-blue-300">
+                        <RefreshCw size={14} className="text-blue-500 shrink-0" />
+                        <span>Sincronização em Massa Ativa ({matchingShared.length + 1} convênios no {editingLogin.bank})</span>
+                      </div>
+                      <p className="text-slate-600 dark:text-slate-300 text-[11px] leading-relaxed">
+                        Este login ({editingLogin.username}) pertence ao mesmo banco em outros convênios. <strong>Ao alterar e salvar a senha aqui, ela será atualizada automaticamente em todos os {matchingShared.length + 1} convênios que utilizam este mesmo login no {editingLogin.bank}!</strong>
+                      </p>
+                      <div className="flex flex-wrap gap-1 pt-0.5">
+                        {matchingShared.map(m => {
+                          const cov = covenants.find(c => isLoginAssociatedWithCovenant(m, c.id));
+                          return (
+                            <span key={m.id} className="px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-900/60 text-blue-800 dark:text-blue-200 text-[10px] font-medium">
+                              {cov?.name || 'Convênio'} ({cov?.state || '-'})
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
 
               <div className="flex justify-end gap-2 border-t pt-4 dark:border-slate-800">
                 <button

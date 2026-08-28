@@ -45,7 +45,7 @@ import {
   CheckCircle2
 } from 'lucide-react';
 import { Covenant, CovenantCategory, Login, System, User, LoginStatus } from '../types';
-import { normalizeText, matchesSearch, isLoginAssociatedWithCovenant, getLoginCovenantIds } from '../lib/utils';
+import { normalizeText, matchesSearch, isLoginAssociatedWithCovenant, getLoginCovenantIds, isSameLoginAndBank, findMatchingBankLogins } from '../lib/utils';
 import { detectDuplicates, DuplicatesReport } from '../lib/duplicateDetector';
 import * as XLSX from 'xlsx';
 import { BRAZILIAN_STATES } from './OperationalView';
@@ -1335,11 +1335,26 @@ export default function Accesses({
                                 }`}
                               >
                                 <div className="flex items-center justify-between gap-1 mb-1.5">
-                                  <div className="flex items-center gap-1.5 min-w-0">
+                                  <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
                                     <span className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1 truncate">
                                       <Landmark size={12} className="text-blue-500 shrink-0" />
                                       <span className="truncate">{l.bank || 'Banco Geral'}</span>
                                     </span>
+                                    {(() => {
+                                      const shared = findMatchingBankLogins(l, logins);
+                                      if (shared.length > 1) {
+                                        return (
+                                          <span
+                                            className="px-1.5 py-0.2 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold text-[9px] border border-blue-500/20 flex items-center gap-0.5 shrink-0"
+                                            title={`Login compartilhado no ${l.bank} em ${shared.length} convênios. Alterações de senha sincronizam todos.`}
+                                          >
+                                            <RefreshCw size={8} className="text-blue-500" />
+                                            <span>Sincronizado ({shared.length}x)</span>
+                                          </span>
+                                        );
+                                      }
+                                      return null;
+                                    })()}
                                     {duplicatesReport.duplicateLoginIdSet.has(l.id) && (
                                       <button
                                         onClick={() => setIsDuplicatesModalOpen(true)}
@@ -1637,8 +1652,23 @@ export default function Accesses({
 
                           {/* Username */}
                           <td className="py-3 px-4 font-mono font-bold text-slate-900 dark:text-white">
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex items-center gap-1.5 flex-wrap">
                               <span>{login.username}</span>
+                              {(() => {
+                                const shared = findMatchingBankLogins(login, logins);
+                                if (shared.length > 1) {
+                                  return (
+                                    <span
+                                      className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 shrink-0"
+                                      title={`Login compartilhado com o mesmo usuário no ${login.bank} em ${shared.length} convênios. Alterações de senha sincronizam todos.`}
+                                    >
+                                      <RefreshCw size={9} className="text-blue-500" />
+                                      <span>Sincronizado ({shared.length}x)</span>
+                                    </span>
+                                  );
+                                }
+                                return null;
+                              })()}
                               {duplicatesReport.duplicateLoginIdSet.has(login.id) && (
                                 <button
                                   onClick={() => setIsDuplicatesModalOpen(true)}
@@ -2459,6 +2489,38 @@ export default function Accesses({
                   }`}
                 />
               </div>
+
+              {/* Shared Login & Auto-Sync Alert */}
+              {(() => {
+                const matchingShared = findMatchingBankLogins(editingSingleLogin, logins).filter(x => x.id !== editingSingleLogin?.id);
+                if (matchingShared.length > 0 && editingSingleLogin?.username && editingSingleLogin?.bank) {
+                  return (
+                    <div className="p-3 bg-blue-50/90 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800 rounded-xl text-xs space-y-1.5 animate-fade-in">
+                      <div className="flex items-center gap-1.5 font-bold text-blue-800 dark:text-blue-300">
+                        <RefreshCw size={14} className="text-blue-600 dark:text-blue-400 shrink-0" />
+                        <span>Sincronização Automática ({matchingShared.length + 1} convênios no {editingSingleLogin.bank})</span>
+                      </div>
+                      <p className="text-slate-600 dark:text-slate-300 text-[11px] leading-relaxed">
+                        Este login ({editingSingleLogin.username}) pertence ao mesmo banco em outros convênios. <strong>Ao alterar a senha aqui, ela será atualizada automaticamente em todos os {matchingShared.length + 1} cadastros vinculados!</strong>
+                      </p>
+                      <div className="flex flex-wrap gap-1 pt-0.5">
+                        {matchingShared.slice(0, 6).map(m => {
+                          const cov = covenants.find(c => isLoginAssociatedWithCovenant(m, c.id));
+                          return (
+                            <span key={m.id} className="px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-900/60 text-blue-900 dark:text-blue-200 text-[10px] font-medium">
+                              {cov?.name || 'Convênio'} ({cov?.state || '-'})
+                            </span>
+                          );
+                        })}
+                        {matchingShared.length > 6 && (
+                          <span className="text-[10px] text-slate-500 self-center">+{matchingShared.length - 6} outros</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
 
               {/* Actions */}
               <div className="pt-3 border-t flex items-center justify-end gap-2 dark:border-slate-800">

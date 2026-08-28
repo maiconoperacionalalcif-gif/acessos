@@ -1,5 +1,6 @@
 import { Covenant, System, Login, User, HistoryLog, SystemConfig, LoginReservationLog, AccessRequest } from '../types';
 import { transformGoogleSheetsUrl, parseCSV, syncCsvRowsToDatabase } from './sheetsSync';
+import { synchronizePasswordAcrossSameLoginAndBank } from './utils';
 
 export interface FullDatabase {
   config: SystemConfig;
@@ -87,6 +88,18 @@ export async function saveEntity(table: 'covenants' | 'systems' | 'logins' | 'us
     } else {
       arr.push(item);
     }
+
+    // Synchronize passwords across all logins and covenants that share the same username and bank
+    if (table === 'logins' && item.username && item.bank && item.password !== undefined) {
+      const syncResult = synchronizePasswordAcrossSameLoginAndBank(item, currentDb.logins || [], currentDb.covenants || []);
+      currentDb.logins = syncResult.updatedLogins;
+      currentDb.covenants = syncResult.updatedCovenants;
+    } else if (table === 'covenants' && item.login && item.bank && item.password !== undefined) {
+      const syncResult = synchronizePasswordAcrossSameLoginAndBank({ username: item.login, bank: item.bank, password: item.password }, currentDb.logins || [], currentDb.covenants || []);
+      currentDb.logins = syncResult.updatedLogins;
+      currentDb.covenants = syncResult.updatedCovenants;
+    }
+
     localStorage.setItem('access_manager_db', JSON.stringify(currentDb));
     return currentDb;
   }
