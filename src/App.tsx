@@ -1336,17 +1336,6 @@ export default function App() {
               <span>{config.companyName || 'ACESSOS ALCIF'}</span>
             </span>
 
-            {/* Quick Spreadsheet sync button in header */}
-            <button
-              onClick={() => handleSyncGoogleSheets()}
-              disabled={isSyncingSheets}
-              className="hidden sm:flex items-center gap-1.5 bg-emerald-50 dark:bg-emerald-950/30 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 px-3 py-1.5 rounded-full text-[11px] font-bold cursor-pointer transition-all disabled:opacity-50"
-              title="Clique para sincronizar com sua Planilha Google Sheets"
-            >
-              <RefreshCw size={12} className={isSyncingSheets ? "animate-spin text-emerald-600" : "text-emerald-600"} />
-              <span>{isSyncingSheets ? "Sincronizando..." : "Sincronizar Planilha"}</span>
-            </button>
-
             {/* Admin quick toggle to Operational view */}
             {currentUser?.role === 'Administrador' && (
               <button
