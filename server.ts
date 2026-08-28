@@ -30,6 +30,16 @@ let dataBase: FullDatabase = {
       allowedBanks: []
     },
     {
+      id: "usr-alcif",
+      username: "alcif.op",
+      name: "Operacional ALCIF",
+      password: "admin",
+      role: "Operacional",
+      status: "Ativo",
+      allowedCovenants: [],
+      allowedBanks: []
+    },
+    {
       id: "usr-2",
       username: "operacional",
       name: "Operador de Atendimento",
